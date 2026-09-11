@@ -2,6 +2,8 @@
 # ============================================================================
 # RoboMaster EP ES-Check script
 # ============================================================================
+# python ES-Check.py --mode static --conn ap --proto udp --live
+# python ES-Check.py --mode motion --conn ap --proto udp
 # การใช้งานแบบไทย:
 #   1) โหมด static: ตรวจสถานะเซนเซอร์/แบตเตอรี่/IO/ADC/พอร์ต/การเชื่อมต่อ
 #      python ES-Check.py --mode static --conn ap --proto udp --live
@@ -34,11 +36,31 @@ import os
 import logging
 from datetime import datetime
 
-REPO_SRC = r"d:\Cha sahdu\github\RoboMaster-241-251\src"
+# -----------------------------------------------------------------------------
+# IMPORTANT ENVIRONMENT NOTE:
+# The RoboMaster SDK repo source tree is stored in the workspace folder
+# d:\Cha sahdu\github\RoboMaster-241-251\src. The correct interpreter for that
+# SDK is the repo venv's Python 3.8 runtime, not a newly created venv from the
+# editor or Windows Store Python. The ES-Check script should therefore import
+# robomaster from the repo source tree and run only with the repo's venv.
+# -----------------------------------------------------------------------------
+REPO_ROOT = r"d:\Cha sahdu\github\RoboMaster-241-251"
+REPO_SRC = os.path.join(REPO_ROOT, "src")
 if REPO_SRC not in sys.path:
     sys.path.insert(0, REPO_SRC)
 
-from robomaster import robot, config
+try:
+    from robomaster import robot, config
+except Exception as exc:
+    print("=== Environment import guidance ===")
+    print("Expected Python interpreter: repo venv Python 3.8.x")
+    print("Expected source import root:", REPO_SRC)
+    print(
+        "Expected repo venv path:",
+        os.path.join(REPO_ROOT, ".venv", "Scripts", "python.exe"),
+    )
+    print("Import error:", repr(exc))
+    raise
 
 LOG_DIR = os.path.join(os.getcwd(), "logs")
 
