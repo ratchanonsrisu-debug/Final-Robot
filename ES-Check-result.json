@@ -1,0 +1,202 @@
+{
+  "software_info": {
+    "product_version": "01.01.1148",
+    "serial_number": "3JKCJ9800107NM",
+    "conn_type": "ap",
+    "proto_type": "udp",
+    "remote_robot_ip": "192.168.2.1",
+    "product": "EP"
+  },
+  "modules": {
+    "chassis": {
+      "object_class": "Chassis",
+      "has_get_version": true,
+      "has_start": true,
+      "has_stop": true
+    },
+    "gimbal": {
+      "object_class": "Gimbal",
+      "has_get_version": true,
+      "has_start": true,
+      "has_stop": true
+    },
+    "blaster": {
+      "object_class": "Blaster",
+      "has_get_version": true,
+      "has_start": true,
+      "has_stop": true
+    },
+    "camera": {
+      "object_class": "EPCamera",
+      "has_get_version": true,
+      "has_start": true,
+      "has_stop": true
+    },
+    "vision": {
+      "object_class": "Vision",
+      "has_get_version": true,
+      "has_start": true,
+      "has_stop": true
+    },
+    "battery": {
+      "object_class": "Battery",
+      "has_get_version": true,
+      "has_start": true,
+      "has_stop": true
+    },
+    "servo": {
+      "object_class": "Servo",
+      "has_get_version": true,
+      "has_start": true,
+      "has_stop": true
+    },
+    "sensor": {
+      "object_class": "DistanceSensor",
+      "has_get_version": true,
+      "has_start": true,
+      "has_stop": true
+    },
+    "sensor_adaptor": {
+      "object_class": "SensorAdaptor",
+      "has_get_version": true,
+      "has_start": true,
+      "has_stop": true
+    },
+    "robotic_arm": {
+      "object_class": "RoboticArm",
+      "has_get_version": true,
+      "has_start": true,
+      "has_stop": true
+    },
+    "gripper": {
+      "object_class": "Gripper",
+      "has_get_version": true,
+      "has_start": true,
+      "has_stop": true
+    },
+    "armor": {
+      "object_class": "Armor",
+      "has_get_version": true,
+      "has_start": true,
+      "has_stop": true
+    },
+    "uart": {
+      "object_class": "Uart",
+      "has_get_version": true,
+      "has_start": true,
+      "has_stop": true
+    },
+    "ai_module": {
+      "object_class": "AiModule",
+      "has_get_version": true,
+      "has_start": true,
+      "has_stop": true
+    }
+  },
+  "sensor_status": {
+    "distance_sensor": {
+      "class": "DistanceSensor",
+      "sub_distance": true,
+      "unsub_distance": true
+    },
+    "sensor_adaptor": {
+      "class": "SensorAdaptor",
+      "get_adc": true,
+      "get_io": true,
+      "get_pulse_period": true,
+      "sub_adapter": true
+    },
+    "battery": {
+      "class": "Battery",
+      "sub_battery_info": true,
+      "unsub_battery_info": true
+    },
+    "robotic_arm": {
+      "class": "RoboticArm",
+      "available": true
+    },
+    "gripper": {
+      "class": "Gripper",
+      "available": true
+    },
+    "armor": {
+      "class": "Armor",
+      "available": true
+    },
+    "uart": {
+      "class": "Uart",
+      "available": true
+    }
+  },
+  "sample_subscribe": {
+    "battery_subscribe": "ok",
+    "tof_subscribe": "ok",
+    "adapter_subscribe": "ok",
+    "battery_percent": 71,
+    "distance_values": [
+      1912,
+      0,
+      0,
+      0
+    ],
+    "adapter_values": [
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    ]
+  },
+  "ports": {
+    "ROBOT_DEVICE_PORT": 20020,
+    "ROBOT_PROXY_PORT": 30030,
+    "ROBOT_BROADCAST_PORT": 40927,
+    "ROBOT_SDK_PORT_MIN": 10100,
+    "ROBOT_SDK_PORT_MAX": 10500,
+    "ROBOT_DEFAULT_WIFI_ADDR": [
+      "192.168.2.1",
+      20020
+    ],
+    "ROBOT_DEFAULT_RNDIS_ADDR": [
+      "192.168.42.2",
+      20020
+    ],
+    "ROBOT_DEFAULT_LOCAL_WIFI_ADDR": [
+      "192.168.2.23",
+      10100
+    ],
+    "ROBOT_DEFAULT_LOCAL_RNDIS_ADDR": [
+      "192.168.42.3",
+      10100
+    ],
+    "EP video_stream_port": 40921,
+    "EP audio_stream_port": 40922,
+    "EP video_stream_addr": [],
+    "EP audio_stream_addr": [],
+    "EP video_stream_proto": "tcp",
+    "EP audio_stream_proto": "tcp"
+  }
+}
