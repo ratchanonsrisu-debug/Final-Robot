@@ -18,6 +18,9 @@ plt.rcParams["axes.unicode_minus"] = False  # บางฟอนต์ไทย�
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# ต้องตรงกับ AIM_TOLERANCE ที่ใช้จริงตอนรัน gimbal_pid_lab.py (ดูค่าปัจจุบันในไฟล์นั้น)
+AIM_TOLERANCE = 0.005
+
 
 def find_latest_log():
     files = glob.glob(os.path.join(SCRIPT_DIR, "gimbal_pid_log_*.csv"))
@@ -32,6 +35,7 @@ if __name__ == '__main__':
 
     t, yaw, pitch, phase = [], [], [], []
     fire_events = []  # (t, yaw, pitch) ตอนยิงแต่ละนัด
+    err_t, yaw_err, pitch_err = [], [], []  # เฉพาะช่วง AIM ที่มีข้อมูล error จริง
 
     with open(log_path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -43,8 +47,12 @@ if __name__ == '__main__':
             if row["phase"] == "FIRE":
                 fire_events.append((float(row["t_s"]), float(row["yaw_angle_deg"]),
                                      float(row["pitch_angle_deg"])))
+            if row["phase"] == "AIM" and row["yaw_error"] != "":
+                err_t.append(float(row["t_s"]))
+                yaw_err.append(float(row["yaw_error"]) * 100)      # แปลงเป็น % ของเฟรม
+                pitch_err.append(float(row["pitch_error"]) * 100)
 
-    fig, (ax_yaw, ax_pitch) = plt.subplots(2, 1, figsize=(9, 7), sharex=True)
+    fig, (ax_yaw, ax_pitch, ax_err) = plt.subplots(3, 1, figsize=(9, 10), sharex=True)
 
     ax_yaw.plot(t, yaw, "-b", linewidth=1.2, label="yaw angle")
     for i, (ft, fy, _fp) in enumerate(fire_events):
@@ -64,6 +72,21 @@ if __name__ == '__main__':
     ax_pitch.set_title("Time response ของมุม Gimbal (pitch)")
     ax_pitch.grid(True)
     ax_pitch.legend()
+
+    tol_pct = AIM_TOLERANCE * 100
+    ax_err.axhspan(-tol_pct, tol_pct, color="green", alpha=0.15,
+                    label="เกณฑ์ยอมรับ ({0:.2f}%)".format(tol_pct))
+    ax_err.axhline(0, color="k", linewidth=0.8)
+    ax_err.plot(err_t, yaw_err, ".-b", markersize=3, linewidth=1, label="yaw error")
+    ax_err.plot(err_t, pitch_err, ".-g", markersize=3, linewidth=1, label="pitch error")
+    for i, (ft, _fy, _fp) in enumerate(fire_events):
+        ax_err.axvline(ft, color="r", linestyle="--", linewidth=1)
+        ax_err.plot(ft, 0, "rv", markersize=8, label="ยิง" if i == 0 else None)
+    ax_err.set_xlabel("time (s)")
+    ax_err.set_ylabel("error (% ของเฟรม)")
+    ax_err.set_title("Error response ของ PID (แสดงการลู่เข้าศูนย์กลางเป้า -- rise time / overshoot / settling)")
+    ax_err.grid(True)
+    ax_err.legend()
 
     plt.tight_layout()
     out_png = os.path.splitext(log_path)[0] + ".png"
