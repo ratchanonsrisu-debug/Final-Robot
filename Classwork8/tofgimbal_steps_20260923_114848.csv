@@ -1,0 +1,3 @@
+step,x,y,heading,tof_front_mm,tof_right_mm,tof_back_mm,tof_left_mm,wall_N,wall_E,wall_S,wall_W,center_iters,center_err_x_mm,center_err_y_mm,kind,target,ok,hop_time_s,impact,slip
+0,0,0,N,2021,140,293,153,0,1,1,1,2,1838,12,go,"(0, 1)",True,20.09,False,False
+1,0,1,N,1297,359,1043,1319,0,1,0,1,6,1141,,go,"(0, 2)",True,38.5,False,False

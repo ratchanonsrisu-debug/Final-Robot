@@ -9,8 +9,10 @@ import cv2
 import numpy as np
 from robomaster import robot, blaster
 #cd "d:\ROBOT-Final\Final-Robot\PIDGimball"
-#python detectcolor.py fire        (ยิง IR ปลอดภัย)
-#python detectcolor.py fire_live   (ยิงกระสุนเจลจริง ต้องพิมพ์ยืนยันก่อน)
+#python detectcolor.py fire               (ยิงทุกป้ายที่เจอ, IR ปลอดภัย)
+#python detectcolor.py fire_live          (ยิงทุกป้ายที่เจอ, กระสุนเจลจริง ต้องพิมพ์ยืนยันก่อน)
+#python detectcolor.py fire_select        (เลือกสเปคสี x รูปทรงก่อนยิง, IR ปลอดภัย)
+#python detectcolor.py fire_select_live   (เลือกสเปคสี x รูปทรงก่อนยิง, กระสุนเจลจริง ต้องพิมพ์ยืนยันก่อน)
 #python detectcolor.py colorscan
 
 
@@ -95,6 +97,25 @@ pid_pitch = PIDController(kp=80.0, ki=0.0, kd=0.0, limits=(-50, 50))
 LOCK_ERROR_THRESHOLD = 0.008     # เดิม 0.015 (~19px/~3.3ซม.) บีบเหลือ ~10px/~1.7ซม. ที่ระยะ 100ซม.
 LOCK_DWELL_FRAMES = 5            # เดิม 3 เพิ่มเป็น 5 ให้มีเวลาสั่ง speed=0 ค้างไว้นานขึ้นก่อนยิง (กันโมเมนตัมตกค้าง)
 
+# เจอจาก log จริง (2026-09-24 เดโม่): ป้ายบางสี (BLUE) ตรวจจับติดๆดับๆ (เจอ-หลุดสลับกัน) ทำให้ lock_dwell_count
+# โดนรีเซ็ตกลับ 0 ซ้ำๆ ก่อนครบ LOCK_DWELL_FRAMES ทุกครั้ง ค้างอยู่ป้ายเดียวนาน ~70 วินาทีไม่ไปไหนเลย เพราะไม่เคยมี
+# เพดานเวลาให้ยอมแพ้ -- เพิ่ม timeout นี้กันค้างไม่รู้จบ ถ้าล็อกป้ายนี้ไม่ได้ภายในเวลานี้ ข้ามไปเป้าถัดไปเลย (ไม่ยิง)
+TARGET_SEARCH_TIMEOUT_S = 8.0
+
+# --------------------------------------------------
+# โหมด "fire_select"/"fire_select_live" เท่านั้น: ป้ายเป็นแถวยาว 20 ใบ กล้องเห็นได้ไม่หมดในมุมเดียว
+# แต่ละสถานี: เจอป้ายที่ตรงสเปค -> รอกด Enter ยืนยันแล้วค่อยยิง (ปลอดภัย ไม่ auto ยิงเอง)
+#             ไม่เจอป้ายเลยเกิน STATION_EMPTY_SKIP_TIMEOUT_S -> ข้ามไปสไลด์ต่อเองอัตโนมัติ (ไม่มีอะไรให้ยืนยัน ไม่ต้องรอ Enter)
+# ยิง/ข้ามครบ 1 สถานี -> สไลด์ตัวรถไปด้านข้าง (ไม่หมุน ไม่ขยับ gimbal) -> ทำซ้ำจนครบ STATION_COUNT สถานี
+# ใช้ chassis.move(z=0) สั่ง "หมุน 0 องศา" ชัดเจนระหว่างสไลด์ กันตัวรถหมุนเบี้ยวจากล้อ mecanum (ล็อกองศาตามที่ขอ)
+# --------------------------------------------------
+STATION_COUNT = 4             # จำนวนสถานีทั้งหมด (ตรวจ+ยิง 4 ครั้ง, สไลด์ข้างคั่นกลาง 3 ครั้ง)
+STATION_SLIDE_Y_M = 0.6       # ระยะสไลด์ข้างต่อสถานี (เมตร)
+# ทิศ + = ขวา ตามธรรมเนียม SDK RoboMaster (x=หน้า, y=ขวา, z=ตามเข็มนาฬิกา) -- ยังไม่ได้ยืนยันกับของจริง
+# ถ้าทดสอบแล้วสไลด์ผิดทิศ (ไปซ้ายแทนขวา) ให้สลับเป็นค่าลบ
+STATION_SLIDE_XY_SPEED = 0.5  # ความเร็วสไลด์ (m/s) ใช้ค่าต่ำสุดที่ SDK อนุญาต [0.5,2] เพื่อความนิ่ง/แม่นยำ
+STATION_EMPTY_SKIP_TIMEOUT_S = 2.0  # ไม่เจอป้ายที่ตรงสเปคเลยติดต่อกันนานเกินนี้ (วิ) ที่สถานีปัจจุบัน -> ถือว่าสถานีนี้ไม่มีเป้า ข้ามไปสไลด์ต่อเอง
+
 # จุดเล็งแนวตั้งบนตัวป้าย: 0 = ขอบบนสุด, 0.5 = กึ่งกลาง, 1 = ขอบล่างสุด
 # เล็งใกล้ขอบบนป้ายแทนกึ่งกลาง เพราะยิงโดนด้านบนทำให้ป้ายล้มง่ายกว่า
 AIM_POINT_Y_RATIO = 0.2
@@ -118,8 +139,10 @@ AIM_POINT_Y_RATIO = 0.2
 # ขวาสุดต้องขยับมากสุด / กลางปานกลาง / ซ้ายสุดน้อยสุด -> fine-tune ทีละนิด (ก้าวเล็กกว่ารอบก่อนๆ เพราะใกล้จุดแล้ว)
 # ทดสอบรอบ 6: ซ้ายสุด (-0.007) กับกลาง (+0.006) โอเคแล้ว ไม่แก้ต่อ / ขวาสุด (+0.015) แรงไป เกือบหลุดกรอบ (ขวาเกิน)
 # -> bisect ขวาสุดระหว่าง 0 กับ +0.015
+# ป้ายซ้ายสุด (index 0) แก้ใหม่ด้วย laser_calibrate.py (ยิง IR ซ้ำ+คลิกจุดที่เห็นในภาพ, เฉลี่ยจาก 10 ตัวอย่าง)
+# ได้ +0.0156 -- แทนที่ค่า -0.007 จากรอบ 6 เดิม (คนละวิธีวัด/คนละรอบทดสอบ ต้องยิงจริงเช็คซ้ำอีกทีว่าดีขึ้นจริงมั้ย)
 AIM_OFFSET_X_BY_INDEX = {
-    0: -0.007,  # ป้ายซ้ายสุด (ลำดับยิงที่ 1) - โอเคแล้วจากรอบ 6 ไม่ต้องแก้
+    0: 0.0156,  # ป้ายซ้ายสุด (ลำดับยิงที่ 1) - ค่าใหม่จาก laser_calibrate.py (IR, เฉลี่ย 10 ตัวอย่าง) ยังไม่ยืนยันด้วยยิงจริง
     1: 0.006,   # ป้ายถัดมา (ลำดับยิงที่ 2) - แม่นแล้วจากรอบ 6 ไม่ต้องแก้
     2: 0.008,   # ป้ายขวาสุด/ป้ายที่ 3 (ลำดับยิงที่ 3) - รอบ 6 ขวาเกินไปที่ +0.015 bisect ระหว่าง 0 กับ +0.015
 }
@@ -141,7 +164,14 @@ ep_camera = None
 # (fire_accuracy_log.csv เดิมมีแค่ 1 แถวต่อ 1 นัดที่ยิงสำเร็จ ไม่พอวาดกราฟ time response แบบต่อเนื่อง)
 # --------------------------------------------------
 TIME_RESPONSE_LOG_PATH = os.path.join(SAVE_DIR, "gimbal_time_response_log.csv")
+TIME_RESPONSE_HEADER = ["elapsed_sec", "target_idx", "color", "yaw_angle_deg", "pitch_angle_deg", "err_x", "err_y", "fired"]
 _gimbal_angle = {"pitch": 0.0, "yaw": 0.0}  # อัปเดตจาก callback ของ ep_gimbal.sub_angle()
+
+# เดิม log_time_response เปิด/เขียน/ปิดไฟล์ CSV ทุกเฟรม (เรียกทุกเฟรมในลูปเล็ง/ยิง) -- open+write+close
+# ของ Python ทุกเฟรมแบบนี้หน่วง loop จริง (ยิ่งถ้าโฟลเดอร์นี้อยู่บนไดรฟ์ที่ sync คลาวด์ เช่น OneDrive/Dropbox
+# จะยิ่งช้า) ทำให้ภาพ/การควบคุมดีเลย์สะสม เปลี่ยนมา buffer ในหน่วยความจำก่อน แล้วค่อยเขียนเป็นชุดแทน
+_TIME_RESPONSE_FLUSH_EVERY = 30  # เขียนไฟล์เป็นชุดทุกกี่แถว
+_time_response_buffer = []
 
 
 def _on_gimbal_angle(angle_info):
@@ -152,16 +182,32 @@ def _on_gimbal_angle(angle_info):
 
 
 def log_time_response(elapsed_sec, target_idx, color, err_x, err_y, fired):
-    """บันทึก 1 แถวต่อเฟรม: เวลา, มุม yaw/pitch ปัจจุบัน, error, และธงว่ายิงตรงเฟรมนี้มั้ย
-    เอาไว้ plot time response ของมุม gimbal เทียบเวลา (เหมือนกราฟในรายงาน PID เดิม)"""
-    _append_csv_row(
-        TIME_RESPONSE_LOG_PATH,
-        ["elapsed_sec", "target_idx", "color", "yaw_angle_deg", "pitch_angle_deg", "err_x", "err_y", "fired"],
-        [f"{elapsed_sec:.3f}", target_idx, color,
-         f"{_gimbal_angle['yaw']:.2f}", f"{_gimbal_angle['pitch']:.2f}",
-         f"{err_x:.4f}" if err_x is not None else "-", f"{err_y:.4f}" if err_y is not None else "-",
-         int(fired)],
-    )
+    """เก็บ 1 แถวต่อเฟรมไว้ใน buffer ในหน่วยความจำก่อน (ไม่เปิดไฟล์ทุกเฟรม กัน loop หน่วง)
+    ค่อยเขียนลงไฟล์จริงเป็นชุดทุก _TIME_RESPONSE_FLUSH_EVERY แถว ผ่าน flush_time_response_log()
+    (เรียก flush อีกทีตอนจบโปรแกรมเสมอ กันแถวที่ยังค้างใน buffer หายไป)"""
+    global _time_response_buffer
+    _time_response_buffer.append([
+        f"{elapsed_sec:.3f}", target_idx, color,
+        f"{_gimbal_angle['yaw']:.2f}", f"{_gimbal_angle['pitch']:.2f}",
+        f"{err_x:.4f}" if err_x is not None else "-", f"{err_y:.4f}" if err_y is not None else "-",
+        int(fired),
+    ])
+    if len(_time_response_buffer) >= _TIME_RESPONSE_FLUSH_EVERY:
+        flush_time_response_log()
+
+
+def flush_time_response_log():
+    """เขียนแถวที่ค้างอยู่ใน buffer ลงไฟล์ CSV จริงเป็นชุดเดียว (เปิดไฟล์ครั้งเดียว) แล้วล้าง buffer"""
+    global _time_response_buffer
+    if not _time_response_buffer:
+        return
+    is_new = not os.path.exists(TIME_RESPONSE_LOG_PATH)
+    with open(TIME_RESPONSE_LOG_PATH, "a", newline="", encoding="utf-8-sig") as f:
+        writer = csv.writer(f)
+        if is_new:
+            writer.writerow(TIME_RESPONSE_HEADER)
+        writer.writerows(_time_response_buffer)
+    _time_response_buffer = []
 
 
 def save_frame(prefix, frame=None):
@@ -219,6 +265,20 @@ def draw_overlay(frame, bbox, locked=False, info_lines=None):
     return frame
 
 
+def slide_station(ep_robot, ep_gimbal, y_m=STATION_SLIDE_Y_M, xy_speed=STATION_SLIDE_XY_SPEED):
+    """สไลด์ตัวรถไปด้านข้าง y_m เมตร ระหว่างสถานี (โหมด fire_select/fire_select_live เท่านั้น)
+    สั่ง z=0 (หมุน 0 องศา) ชัดเจนกันตัวรถหมุนเบี้ยวจากล้อ mecanum, ไม่แตะ gimbal เลย (ล็อกมุมเล็งไว้)
+    คืนค่า True ถ้าสไลด์สำเร็จ, False ถ้าสั่งไม่สำเร็จ (จะตรวจ/ยิงต่อที่ตำแหน่งเดิมแทน)"""
+    ep_gimbal.drive_speed(pitch_speed=0, yaw_speed=0)
+    try:
+        ep_robot.chassis.move(x=0, y=y_m, z=0, xy_speed=xy_speed, z_speed=60).wait_for_completed()
+        print(f"[Chassis] สไลด์ข้างสำเร็จ ({y_m:+.2f} m)")
+        return True
+    except Exception as e:
+        print(f"[Chassis] [WARN] สไลด์ข้างล้มเหลว: {e} -- จะตรวจ/ยิงต่อที่ตำแหน่งเดิมแทน (ไม่ขยับ)")
+        return False
+
+
 # --------------------------------------------------
 # โหมด "fire": คุม Gimbal เองด้วย WASD จนเจอป้ายที่จะยิงครบในกรอบ ROI แล้วกด Enter/Space
 # เพื่อเริ่มยิงอัตโนมัติทีละป้าย เรียงจากซ้ายสุด -> ขวาสุด (ใช้ detect_signs() ตัวเดียวกับ colorscan
@@ -245,11 +305,15 @@ def log_accuracy(target_id, err_x, err_y, frame, yaw_speed, pitch_speed, time_to
           f"(x={err_x_px:.1f}px, y={err_y_px:.1f}px), bbox_px={bbox_px}, ใช้เวลา {time_to_lock:.2f}s -> {os.path.basename(ACCURACY_LOG_PATH)}")
 
 
-def run_fire_mode(ep_robot, safe_mode):
+def run_fire_mode(ep_robot, safe_mode, interactive_filter=False, station_count=1):
     """คุม Gimbal เองด้วย WASD จนเจอป้ายครบในกรอบ ROI แล้วกด Enter/Space
     -> รีเซ็ต PID + ล็อกลำดับป้ายซ้าย->ขวา แล้วเล็ง+ยิงอัตโนมัติทีละป้ายเรียงซ้าย->ขวาจนครบ
-    safe_mode=True (โหมด "fire") ยิง IR เท่านั้นเสมอ
-    safe_mode=False (โหมด "fire_live") ยิงกระสุนเจลจริง เรียกจาก main() หลังผู้ใช้พิมพ์ยืนยันในหน้าจอแล้วเท่านั้น"""
+    safe_mode=True (โหมด "fire"/"fire_select") ยิง IR เท่านั้นเสมอ
+    safe_mode=False (โหมด "fire_live"/"fire_select_live") ยิงกระสุนเจลจริง เรียกจาก main() หลังผู้ใช้พิมพ์ยืนยันในหน้าจอแล้วเท่านั้น
+    interactive_filter=True (โหมด "fire_select"/"fire_select_live") ให้ผู้ใช้เลือกสเปคเป้าหมาย (สี+รูปทรง)
+    ก่อนเริ่มเล็ง/ยิง -- ป้ายที่ไม่ตรงสเปคที่เลือกไว้จะถูกมองข้ามไปเลยตลอดทั้งโหมด (ไม่นับ ไม่เล็ง ไม่ยิง)
+    station_count>1 (เฉพาะ fire_select/fire_select_live) ยิงครบ 1 สถานีแล้วสไลด์ตัวรถไปด้านข้าง STATION_SLIDE_Y_M
+    เมตร แล้วรอกด Enter ยืนยันก่อนตรวจ+ยิงรอบใหม่ ทำซ้ำจนครบ station_count สถานีค่อยจบโปรแกรม"""
     global ep_gimbal, ep_blaster, ep_camera
 
     reset_sign_tracker()
@@ -279,12 +343,31 @@ def run_fire_mode(ep_robot, safe_mode):
     except cv2.error:
         pass
 
+    target_filter = None  # None = ไม่กรอง (ยิงทุกสีที่เจอ เหมือนโหมด fire/fire_live เดิม)
+    if interactive_filter:
+        result = run_target_filter_selection(ep_gimbal, ep_camera, window_name)
+        if result is None:
+            print(">> ยกเลิกโหมด fire_select ตั้งแต่ขั้นเลือกสเปค ไม่มีการเล็ง/ยิงเกิดขึ้น")
+            ep_gimbal.drive_speed(pitch_speed=0, yaw_speed=0)
+            try:
+                ep_gimbal.unsub_angle()
+            except Exception:
+                pass
+            cv2.destroyAllWindows()
+            ep_camera.stop_video_stream()
+            return
+        target_filter = result
+
     print("=" * 60)
     print("โหมด fire")
     print("คุม Gimbal เอง: W=เงยขึ้น, S=ก้มลง, A=หันซ้าย, D=หันขวา")
     print("เล็งให้ป้ายที่จะยิงอยู่ในกรอบเหลือง (ROI) ให้ครบ แล้วกด Enter หรือ Space")
     print("-> รีเซ็ต PID + ล็อกลำดับป้ายซ้าย->ขวา แล้วเล็ง+ยิงอัตโนมัติทีละป้ายจนครบ จบโปรแกรมเอง")
     print(f"safe_mode={safe_mode} ({'ยิง IR เท่านั้น ปลอดภัย ไม่มีกระสุนเจลออก' if safe_mode else 'ยิงกระสุนเจลจริง!!'})")
+    if station_count > 1:
+        print(f"ทั้งหมด {station_count} สถานี: เจอป้ายที่ตรงสเปค -> รอกด Enter ยืนยันก่อนยิง (ปลอดภัย)")
+        print(f"ไม่เจอป้ายเลยเกิน {STATION_EMPTY_SKIP_TIMEOUT_S:.1f}s ที่สถานีนั้น -> ข้ามไปสไลด์ต่อเอง "
+              f"({STATION_SLIDE_Y_M:+.2f} m, ล็อกองศาไม่หมุน) โดยไม่ต้องกด Enter")
     print("สำคัญ: ต้องคลิกที่หน้าต่างภาพ 'RoboMaster Camera - fire' ให้โฟกัสก่อน ถึงจะกดคีย์ได้")
     print("กด ESC หรือ q เพื่อยกเลิก")
     print("=" * 60)
@@ -294,11 +377,14 @@ def run_fire_mode(ep_robot, safe_mode):
     yaw_dir = 0
     pitch_dir = 0
     live_signs = []
+    last_aim_log_time = 0.0  # throttle print [AIM] ไม่ให้ยิงทุกเฟรม (terminal I/O ถ่วง loop)
 
     targets = None      # list ของสีป้าย เรียงซ้าย->ขวา หลังกด Enter ล็อกลำดับแล้ว
     target_idx = 0
     target_start_time = 0.0
     lock_dwell_count = 0  # นับเฟรมที่อยู่ในเกณฑ์ล็อกต่อเนื่อง ก่อนค่อยยิงจริง
+    station_idx = 1        # สถานีปัจจุบัน (1-based) ใช้เฉพาะตอน station_count > 1 (fire_select/fire_select_live)
+    station_wait_start = time.time()  # เวลาที่เริ่มรอที่สถานีนี้ -- ไม่เจอป้ายเลยเกิน STATION_EMPTY_SKIP_TIMEOUT_S ก็ข้ามไปสไลด์ต่อเอง
 
     try:
         while True:
@@ -307,6 +393,10 @@ def run_fire_mode(ep_robot, safe_mode):
 
             if frame is not None:
                 live_signs = detect_signs(frame)
+                if target_filter is not None:
+                    sel_colors, sel_shapes = target_filter
+                    live_signs = [s for s in live_signs
+                                  if s["color"] in sel_colors and s["sign_type"] in sel_shapes]
 
             key = cv2.waitKey(1) & 0xFF
             if key != 255:
@@ -346,14 +436,62 @@ def run_fire_mode(ep_robot, safe_mode):
                     else:
                         print("[WARN] ยังไม่เจอป้ายในกรอบ ROI เลย ลองขยับกล้องก่อนกด Enter")
 
+                # โหมดหลายสถานี: ไม่เจอป้ายที่ตรงสเปคเลยต่อเนื่องเกิน timeout ที่สถานีนี้ -> ไม่มีอะไรให้ยิง/ยืนยัน
+                # ข้ามไปสไลด์สถานีถัดไปเองอัตโนมัติ (ไม่ต้องรอ Enter เพราะไม่มีเป้าให้ล็อก)
+                if station_count > 1 and not live_signs and (now - station_wait_start) > STATION_EMPTY_SKIP_TIMEOUT_S:
+                    if station_idx < station_count:
+                        print(f"\n>> สถานี {station_idx}/{station_count} ไม่เจอป้ายที่ตรงสเปคภายใน "
+                              f"{STATION_EMPTY_SKIP_TIMEOUT_S:.1f}s -> ข้ามไปสไลด์ต่อ (ไม่ยิง)")
+                        slide_station(ep_robot, ep_gimbal)
+                        station_idx += 1
+                        target_idx = 0
+                        lock_dwell_count = 0
+                        station_wait_start = time.time()
+                        info_lines = [f"station {station_idx}/{station_count} -- auto-detecting..."]
+                        if frame is not None:
+                            y0 = 30
+                            for line in info_lines:
+                                cv2.putText(frame, line, (10, y0), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                                y0 += 26
+                            cv2.imshow(window_name, frame)
+                        continue
+                    else:
+                        print(f"\n>> ครบทุกสถานีแล้ว ({station_count}/{station_count}) สถานีสุดท้ายไม่เจอป้าย จบโปรแกรม")
+                        break
+
                 info_lines = ["WASD=aim  ENTER/SPACE=start firing  ESC/Q=cancel",
                               f"signs found: {len(live_signs)}"]
+                if target_filter is not None:
+                    sel_colors, sel_shapes = target_filter
+                    info_lines.append(f"filter: {'/'.join(sorted(sel_colors))} x {'/'.join(sorted(sel_shapes))}")
+                if station_count > 1:
+                    remaining = STATION_EMPTY_SKIP_TIMEOUT_S - (now - station_wait_start)
+                    info_lines.append(f"station {station_idx}/{station_count}"
+                                       + (f"  auto-skip in {remaining:.1f}s if empty" if not live_signs and remaining > 0 else ""))
 
             else:
                 # เฟสยิงอัตโนมัติ: หาป้ายใบเดิม (track_id เป๊ะๆ) ที่ต้องการในบรรดาป้ายที่เห็นตอนนี้ แล้ว PID ล็อก+ยิง
                 if target_idx >= len(targets):
-                    print("\n>> ยิงครบทุกป้ายแล้ว จบโปรแกรม")
-                    break
+                    if station_idx < station_count:
+                        print(f"\n>> ยิงครบทุกป้ายที่สถานี {station_idx}/{station_count} แล้ว -> สไลด์ไปสถานีถัดไป")
+                        slide_station(ep_robot, ep_gimbal)
+                        station_idx += 1
+                        targets = None
+                        target_idx = 0
+                        lock_dwell_count = 0
+                        station_wait_start = time.time()
+                        info_lines = [f"station {station_idx}/{station_count} -- auto-detecting..."]
+
+                        if frame is not None:
+                            y0 = 30
+                            for line in info_lines:
+                                cv2.putText(frame, line, (10, y0), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                                y0 += 26
+                            cv2.imshow(window_name, frame)
+                        continue  # กลับไปวนรอบใหม่ -- targets เป็น None แล้ว รอบหน้าจะเข้าเฟส aim (รอกด Enter) แทน
+                    else:
+                        print(f"\n>> ยิงครบทุกสถานีแล้ว ({station_count}/{station_count}) จบโปรแกรม")
+                        break
 
                 want_color, want_track_id = targets[target_idx]
                 # เจาะจงยึด track_id เดิมก่อน ถ้าป้ายนั้นหลุดหายไปนานจนถูกลืม (เกิน MAX_STABLE_MISSES) ค่อย fallback ไปหาด้วยสีแทน
@@ -362,7 +500,20 @@ def run_fire_mode(ep_robot, safe_mode):
                     match = next((s for s in live_signs if s["color"] == want_color), None)
                 info_lines = [f"target {target_idx + 1}/{len(targets)}: {want_color}#{want_track_id}"]
 
-                if match is None or frame is None:
+                if now - target_start_time > TARGET_SEARCH_TIMEOUT_S:
+                    # ล็อกป้ายนี้ไม่ได้ภายในเวลาที่กำหนด (ตรวจจับติดๆดับๆ/หาไม่เจอ) -- ยอมแพ้ ข้ามไปเป้าถัดไป
+                    # กันค้างไม่รู้จบแบบที่เจอใน log จริง (ค้างป้ายเดียว ~70 วินาที)
+                    print(f"\n>> ป้าย {want_color}#{want_track_id} ล็อกไม่ได้ภายใน {TARGET_SEARCH_TIMEOUT_S:.0f}s "
+                          f"-> ยอมแพ้ ข้ามไปเป้าถัดไป (ไม่ยิง)")
+                    ep_gimbal.drive_speed(pitch_speed=0, yaw_speed=0)
+                    log_time_response(now - run_start_time, target_idx, want_color, None, None, fired=False)
+                    pid_yaw.reset()
+                    pid_pitch.reset()
+                    lock_dwell_count = 0
+                    target_idx += 1
+                    target_start_time = now
+                    info_lines.append(f"SKIPPED (timeout {TARGET_SEARCH_TIMEOUT_S:.0f}s)")
+                elif match is None or frame is None:
                     ep_gimbal.drive_speed(pitch_speed=0, yaw_speed=0)
                     lock_dwell_count = 0
                     info_lines.append("searching...")
@@ -381,9 +532,12 @@ def run_fire_mode(ep_robot, safe_mode):
                     err_y = 0.5 - aim_y_n
                     info_lines.append(f"err_x={err_x:.3f} err_y={err_y:.3f} offset_x={aim_offset_x:+.3f} "
                                        f"dwell={lock_dwell_count}/{LOCK_DWELL_FRAMES}")
-                    # log ทุกเฟรมลง terminal ด้วย (ไม่ใช่แค่บนจอ) ไว้ไล่ดูย้อนหลังว่าตอนยิงจริงเล็งไปถึงไหนแล้ว
-                    print(f"[AIM] target_idx={target_idx} {want_color}#{want_track_id} err_x={err_x:+.3f} err_y={err_y:+.3f} "
-                          f"offset_x={aim_offset_x:+.3f} dwell={lock_dwell_count}/{LOCK_DWELL_FRAMES}")
+                    # log ลง terminal ไว้ไล่ดูย้อนหลังว่าตอนยิงจริงเล็งไปถึงไหนแล้ว -- โยนออกทุกเฟรมทำให้ terminal I/O
+                    # ถ่วง loop จริง (เขียนหน้าจอ/เทอร์มินัลไม่ใช่ operation ฟรี) เลย throttle เหลือ ~5 ครั้ง/วินาทีพอ
+                    if now - last_aim_log_time > 0.2:
+                        print(f"[AIM] target_idx={target_idx} {want_color}#{want_track_id} err_x={err_x:+.3f} err_y={err_y:+.3f} "
+                              f"offset_x={aim_offset_x:+.3f} dwell={lock_dwell_count}/{LOCK_DWELL_FRAMES}")
+                        last_aim_log_time = now
 
                     log_time_response(now - run_start_time, target_idx, want_color, err_x, err_y, fired=False)
 
@@ -449,6 +603,7 @@ def run_fire_mode(ep_robot, safe_mode):
             ep_gimbal.unsub_angle()
         except Exception:
             pass
+        flush_time_response_log()  # เขียนแถวที่ยังค้างอยู่ใน buffer ลงไฟล์ กันหายตอนจบ/ยกเลิกกลางคัน
         cv2.destroyAllWindows()
         ep_camera.stop_video_stream()
         print(f"log time response -> {os.path.basename(TIME_RESPONSE_LOG_PATH)}")
@@ -540,6 +695,108 @@ _next_track_id = 1  # เลข id ไม่ซ้ำของแต่ละป
 # คุม Gimbal เองด้วย WASD: W=เงย, S=ก้ม, A=หันซ้าย, D=หันขวา
 MANUAL_TURN_SPEED = 60          # องศา/วินาที
 MANUAL_KEY_HOLD_TIMEOUT = 0.15  # วินาที ถ้าไม่มีคีย์ซ้ำในช่วงนี้ถือว่าปล่อยคีย์แล้ว ให้หยุดหมุน
+
+# --------------------------------------------------
+# โหมด "fire_select"/"fire_select_live": เลือกสเปคเป้าหมาย (สี x รูปทรง) ก่อนเริ่มยิง
+# ป้ายจะต้องตรง "ทั้งสี และ รูปทรง" ที่เลือกไว้ (AND ไม่ใช่ OR) ถึงจะถูกเล็ง/ยิง ป้ายอื่นถูกมองข้ามทั้งหมด
+# ถ้าสเปคเดียวกันมีป้ายจริงมากกว่า 1 ใบในเฟรม -> ยิงทุกใบที่ตรง (ไม่ใช่แค่ใบแรกที่เจอ)
+# --------------------------------------------------
+SHAPE_LABELS_TH = {"CIRCLE": "วงกลม", "VERTICAL": "สี่เหลี่ยมแนวตั้ง", "HORIZONTAL": "สี่เหลี่ยมแนวนอน"}
+
+# ปุ่มเลือกสี: กดซ้ำ = toggle เลือก/ถอน
+COLOR_SELECT_KEYMAP = {ord('1'): "RED", ord('2'): "GREEN", ord('3'): "BLUE", ord('4'): "YELLOW"}
+# ปุ่มเลือกรูปทรง: c=วงกลม, v=แนวตั้ง, h=แนวนอน (รับทั้งตัวพิมพ์เล็ก/ใหญ่)
+SHAPE_SELECT_KEYMAP = {
+    ord('c'): "CIRCLE", ord('C'): "CIRCLE",
+    ord('v'): "VERTICAL", ord('V'): "VERTICAL",
+    ord('h'): "HORIZONTAL", ord('H'): "HORIZONTAL",
+}
+
+
+def run_target_filter_selection(ep_gimbal, ep_camera, window_name):
+    """หน้าจอเลือกสเปคเป้าหมายก่อนเริ่มยิง (โหมด fire_select/fire_select_live)
+    กด 1-4 เลือก/ถอนสี, c/v/h เลือก/ถอนรูปทรง, WASD ขยับกล้องดูตัวอย่างป้ายได้ระหว่างเลือก
+    กรอบเขียว = ป้ายที่ตรงสเปคปัจจุบัน, กรอบเทา = ไม่ตรง (แค่ตัวอย่าง ยังไม่ได้เริ่มยิง)
+    Enter/Space = ยืนยัน (ต้องเลือกอย่างน้อย 1 สี + 1 รูปทรง), ESC/q = ยกเลิกทั้งโหมด
+    คืนค่า (selected_colors:set, selected_shapes:set) หรือ None ถ้ายกเลิก"""
+    selected_colors = set()
+    selected_shapes = set()
+
+    print("=" * 60)
+    print("เลือกสเปคเป้าหมายที่จะยิง (ป้ายต้องตรง 'ทั้งสี และ รูปทรง' ที่เลือกไว้ ถึงจะถูกยิง)")
+    print("สี:      1=แดง  2=เขียว  3=น้ำเงิน  4=เหลือง   (กดซ้ำ = ถอนออก)")
+    print("รูปทรง:  c=วงกลม  v=สี่เหลี่ยมแนวตั้ง  h=สี่เหลี่ยมแนวนอน   (กดซ้ำ = ถอนออก)")
+    print("WASD ขยับกล้องดูตัวอย่างป้ายได้ระหว่างเลือก")
+    print("Enter/Space = ยืนยันสเปค (ต้องเลือกอย่างน้อย 1 สี + 1 รูปทรง) / ESC หรือ q = ยกเลิกทั้งโหมด")
+    print("=" * 60)
+
+    last_yaw_key_time = 0.0
+    last_pitch_key_time = 0.0
+    yaw_dir = 0
+    pitch_dir = 0
+
+    while True:
+        frame = ep_camera.read_cv2_image(strategy="newest", timeout=1)
+        now = time.time()
+        live_signs = detect_signs(frame) if frame is not None else []
+
+        key = cv2.waitKey(1) & 0xFF
+
+        if key in (ord('a'), ord('A')):
+            yaw_dir, last_yaw_key_time = -1, now
+        elif key in (ord('d'), ord('D')):
+            yaw_dir, last_yaw_key_time = 1, now
+        if now - last_yaw_key_time > MANUAL_KEY_HOLD_TIMEOUT:
+            yaw_dir = 0
+        if key in (ord('w'), ord('W')):
+            pitch_dir, last_pitch_key_time = 1, now
+        elif key in (ord('s'), ord('S')):
+            pitch_dir, last_pitch_key_time = -1, now
+        if now - last_pitch_key_time > MANUAL_KEY_HOLD_TIMEOUT:
+            pitch_dir = 0
+        ep_gimbal.drive_speed(pitch_speed=pitch_dir * MANUAL_TURN_SPEED, yaw_speed=yaw_dir * MANUAL_TURN_SPEED)
+
+        color_name = COLOR_SELECT_KEYMAP.get(key)
+        if color_name:
+            selected_colors.symmetric_difference_update({color_name})
+            print(f"[SELECT] สี {'+' if color_name in selected_colors else '-'}{color_name} "
+                  f"-> ตอนนี้: {sorted(selected_colors)}")
+
+        shape_name = SHAPE_SELECT_KEYMAP.get(key)
+        if shape_name:
+            selected_shapes.symmetric_difference_update({shape_name})
+            print(f"[SELECT] รูปทรง {'+' if shape_name in selected_shapes else '-'}{shape_name} "
+                  f"-> ตอนนี้: {sorted(selected_shapes)}")
+
+        if key in (13, 32):  # Enter/Space
+            if selected_colors and selected_shapes:
+                combos = ", ".join(f"{c}+{s}" for c in sorted(selected_colors) for s in sorted(selected_shapes))
+                print(f"\n>> ยืนยันสเปคเป้าหมาย: {combos}")
+                return selected_colors, selected_shapes
+            print("[WARN] ต้องเลือกอย่างน้อย 1 สี และ 1 รูปทรง ก่อนกด Enter")
+
+        if key == 27 or key == ord('q'):
+            print("\nยกเลิกการเลือกสเปค -> ยกเลิกทั้งโหมด")
+            return None
+
+        if frame is not None:
+            info_lines = [
+                "WASD=aim  1-4=color  c/v/h=shape  ENTER=confirm  ESC/Q=cancel",
+                "colors: " + (", ".join(sorted(selected_colors)) if selected_colors else "(none)"),
+                "shapes: " + (", ".join(sorted(selected_shapes)) if selected_shapes else "(none)"),
+            ]
+            y0 = 30
+            for line in info_lines:
+                cv2.putText(frame, line, (10, y0), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                y0 += 26
+            for sign in live_signs:
+                x, y, w, h = sign["bbox_px"]
+                match = sign["color"] in selected_colors and sign["sign_type"] in selected_shapes
+                box_color = (0, 255, 0) if match else (128, 128, 128)
+                cv2.rectangle(frame, (x, y), (x + w, y + h), box_color, 2)
+                cv2.putText(frame, f"{sign['color']} {sign['sign_type']}", (x, max(y - 8, 18)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, box_color, 2)
+            cv2.imshow(window_name, frame)
 
 
 def reset_sign_tracker():
@@ -866,23 +1123,35 @@ def run_colorscan_mode(ep_robot):
 
 # --------------------------------------------------
 # main: เลือกโหมดจากคำสั่งที่พิมพ์ตอนรัน
-#   python detectcolor.py fire       -> เล็ง + ยิงป้ายด้วย PID (ยิง IR เท่านั้น ปลอดภัยเสมอ ไม่มีกระสุนเจลออก)
-#   python detectcolor.py fire_live  -> เหมือน fire ทุกอย่าง แต่ยิงกระสุนเจลจริง (WATER_FIRE) ต้องพิมพ์ยืนยันก่อนเริ่มทุกครั้ง
-#   python detectcolor.py colorscan  -> ตรวจจับป้าย + สีทั้งหมดบนป้าย
+#   python detectcolor.py fire              -> เล็ง + ยิงป้ายทุกใบที่เจอด้วย PID (ยิง IR เท่านั้น ปลอดภัยเสมอ ไม่มีกระสุนเจลออก)
+#   python detectcolor.py fire_live         -> เหมือน fire ทุกอย่าง แต่ยิงกระสุนเจลจริง (WATER_FIRE) ต้องพิมพ์ยืนยันก่อนเริ่มทุกครั้ง
+#   python detectcolor.py fire_select       -> เลือกสเปคเป้าหมาย (สี x รูปทรง) ก่อนเริ่ม ยิงเฉพาะป้ายที่ตรงสเปค
+#                                               !!! ยิงกระสุนเจลจริงเสมอ (ไม่มี IR mode แยกแล้ว) ต้องพิมพ์ยืนยันก่อนเริ่มทุกครั้ง !!!
+#   python detectcolor.py fire_select_live  -> ชื่อเดิม/alias ของ fire_select (พฤติกรรมเหมือนกันทุกอย่าง)
+#   python detectcolor.py colorscan         -> ตรวจจับป้าย + สีทั้งหมดบนป้าย
 # --------------------------------------------------
+FIRE_MODES = ("fire", "fire_live", "fire_select", "fire_select_live")
+# หมายเหตุ: fire_select ไม่มีโหมด IR ปลอดภัยแยกแล้ว (ยิงกระสุนเจลจริงเสมอตามที่ขอ) -- ถ้าอยากเทส aim ก่อนโดยไม่มีกระสุนออก
+# ให้ใช้โหมด "fire" (ไม่เลือกสเปค แต่ยิง IR ปลอดภัย) เทสระบบเล็ง/ล็อกเป้าก่อนได้
+LIVE_AMMO_MODES = ("fire_live", "fire_select", "fire_select_live")
+
+
 def main():
-    if len(sys.argv) < 2 or sys.argv[1] not in ("fire", "fire_live", "colorscan"):
+    if len(sys.argv) < 2 or sys.argv[1] not in FIRE_MODES + ("colorscan",):
         print("วิธีใช้:")
-        print("  python detectcolor.py fire       -> เล็ง + ยิงป้ายด้วย PID (ยิง IR เท่านั้น ปลอดภัย ไม่มีกระสุนเจลออก)")
-        print("  python detectcolor.py fire_live  -> เหมือน fire แต่ยิงกระสุนเจลจริง (ต้องพิมพ์ยืนยันก่อนเริ่ม)")
-        print("  python detectcolor.py colorscan  -> ตรวจจับป้าย + หาสีทั้งหมดบนป้าย")
+        print("  python detectcolor.py fire              -> เล็ง + ยิงป้ายทุกใบที่เจอด้วย PID (ยิง IR เท่านั้น ปลอดภัย ไม่มีกระสุนเจลออก)")
+        print("  python detectcolor.py fire_live         -> เหมือน fire แต่ยิงกระสุนเจลจริง (ต้องพิมพ์ยืนยันก่อนเริ่ม)")
+        print("  python detectcolor.py fire_select       -> เลือกสเปคเป้าหมาย (สี x รูปทรง) ก่อนเริ่ม ยิงเฉพาะที่ตรงสเปค")
+        print("                                              !!! ยิงกระสุนเจลจริงเสมอ ต้องพิมพ์ยืนยันก่อนเริ่ม !!!")
+        print("  python detectcolor.py fire_select_live  -> alias ของ fire_select (เหมือนกันทุกอย่าง)")
+        print("  python detectcolor.py colorscan         -> ตรวจจับป้าย + หาสีทั้งหมดบนป้าย")
         return
 
     mode = sys.argv[1]
 
-    if mode == "fire_live":
+    if mode in LIVE_AMMO_MODES:
         print("=" * 60)
-        print("!!! คำเตือน: fire_live จะยิงกระสุนเจลจริงออกจากป้อมปืนทุกครั้งที่ล็อกเป้าสำเร็จ !!!")
+        print(f"!!! คำเตือน: {mode} จะยิงกระสุนเจลจริงออกจากป้อมปืนทุกครั้งที่ล็อกเป้าสำเร็จ !!!")
         print("เช็คก่อนเริ่ม: มีที่กันกระสุน/แผ่นกันหลังเป้าแล้ว, ไม่มีคน/สัตว์เลี้ยงอยู่ในแนวยิงหรือแนวสะท้อน, บรรจุกระสุนเจลถูกต้องแล้ว")
         print("=" * 60)
         confirm = input("พิมพ์ YES (ตัวพิมพ์ใหญ่ทั้งหมด) เพื่อยืนยันว่าพร้อมยิงจริง: ").strip()
@@ -894,8 +1163,12 @@ def main():
     ep_robot.initialize(conn_type="ap")
 
     try:
-        if mode in ("fire", "fire_live"):
-            run_fire_mode(ep_robot, safe_mode=(mode == "fire"))
+        if mode in FIRE_MODES:
+            safe_mode = mode not in LIVE_AMMO_MODES
+            interactive_filter = mode in ("fire_select", "fire_select_live")
+            station_count = STATION_COUNT if interactive_filter else 1
+            run_fire_mode(ep_robot, safe_mode=safe_mode, interactive_filter=interactive_filter,
+                          station_count=station_count)
         elif mode == "colorscan":
             run_colorscan_mode(ep_robot)
     finally:

@@ -1,0 +1,4 @@
+step,x,y,heading,tof_front_mm,tof_right_mm,tof_back_mm,tof_left_mm,wall_N,wall_E,wall_S,wall_W,center_iters,center_err_x_mm,center_err_y_mm,kind,target,ok,hop_time_s,impact,slip
+0,0,0,N,1979,150,353,166,0,1,1,1,6,1795,,go,"(0, 1)",True,37.59,False,False
+1,0,1,N,1244,154,1140,1504,0,1,0,1,1,1071,,go,"(0, 2)",False,17.09,False,False
+2,0,1,N,1018,144,1375,1492,0,1,0,1,1,872,,go,"(0, 2)",True,17.81,False,False
