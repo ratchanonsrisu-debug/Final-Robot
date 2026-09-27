@@ -162,6 +162,8 @@ class App:
                     pass
                 elif kind == "done":
                     self.btn_explore.state(["!disabled"])
+                elif kind == "click_goto":
+                    self.v_click.set("goto")
                 elif kind == "info":
                     messagebox.showinfo("ผลลัพธ์", val)
         except queue.Empty:
@@ -286,6 +288,9 @@ class App:
             vis, tot = self.explorer.explore()
             self.log(f"สำรวจเสร็จ: {vis}/{tot} ช่อง  เริ่ม {self.m.start}  จบ {self.m.end}")
             self._export(auto=True)
+            if not self.stop_event.is_set():
+                self.q.put(("click_goto", None))
+                self.log("จอดรอคำสั่ง: คลิกช่องบนแผนที่เพื่อสั่งหุ่นไป (แผนที่บันทึกแล้ว)")
         self.run_bg(job, "EXPLORE")
 
     def stop(self):
@@ -308,7 +313,7 @@ class App:
         if not self.m.start:
             messagebox.showinfo("", "ยังไม่มีจุดเริ่มต้น (ยังไม่ได้สำรวจ)"); return
         tgt = tuple(self.m.start[:2])
-        self.run_bg(lambda: self.explorer.go_to(tgt), f"GO HOME {tgt}")
+        self.run_bg(lambda: self.explorer.return_home(), f"GO HOME {tgt}")
 
     def calibrate(self):
         def job():
@@ -386,7 +391,8 @@ class App:
             if mode == "goto":
                 if self.robot is None:
                     messagebox.showwarning("", "กด Apply / เชื่อมต่อหุ่น ก่อน"); return
-                self.run_bg(lambda: self.explorer.go_to((cx, cy)), f"GOTO ({cx},{cy})")
+                self.run_bg(lambda: self.explorer.go_to((cx, cy)) and self.explorer.park(),
+                            f"GOTO ({cx},{cy})")
             else:
                 if self.busy():
                     return

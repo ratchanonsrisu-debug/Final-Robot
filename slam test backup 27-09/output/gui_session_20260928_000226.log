@@ -1,0 +1,272 @@
+[build] โฟลเดอร์: d:\ROBOT-Final\Final-Robot\slam test backup 27-09
+[build] แก้ล่าสุด: config.py 27/09 23:58:39, robots.py 27/09 23:58:20, explorer.py 27/09 23:58:38, gui.py 27/09 23:59:07
+[build] YAW_SIGN=-1 GIMBAL_RIGHT_YAW=90 WALL_EXPECT=184 THRESH=424 USE_SHARP=True MOVE_FACTOR=1.05/1.12
+[robot] กำลังเชื่อมต่อ RoboMaster (AP mode) ...
+[gimbal] yaw sign = +1 (รอบ 1/3: สั่ง moveto(yaw=+30) -> มุมเปลี่ยนจริง +30.2°)
+[robot] เชื่อมต่อสำเร็จ พร้อมใช้งาน
+[REAL] เชื่อมต่อหุ่นจริงสำเร็จ: 5x4, เริ่ม (0,0) หัน N
+log -> d:\ROBOT-Final\Final-Robot\slam test backup 27-09\output\run_20260928_000307
+--- EXPLORE ---
+[yaw] ตั้งมุมอ้างอิง = -0.0°
+[start] START cell=(0, 0) heading=N
+[measured_pose] offset from centre dx=-22mm dy=81mm
+frontier -> (0, 1)  path=N
+frontier -> (0, 2)  path=N
+[measured_pose] offset from centre dx=7mm dy=-62mm
+frontier -> (1, 2)  path=E
+frontier -> (1, 1)  path=S
+[topup] เดิน S ขาด 52mm -> เติม 52mm
+[scan] E: ToF 2276/2260mm vs Sharp 213/209mm ขัดกัน -> UNKNOWN
+recheck wall at (1, 1) toward E
+[goto] GOTO (1, 1) from (1, 1)
+[arrived] ARRIVED at (1, 1)
+[recheck] recheck (1, 1)->E: 3/3 open -> OPEN (Sharp 209mm)
+frontier -> (2, 1)  path=E
+[scan] E: ToF 1499/1503mm vs Sharp 237/232mm ขัดกัน -> UNKNOWN
+[measured_pose] offset from centre dx=-0mm dy=-150mm
+frontier -> (2, 0)  path=S
+frontier -> (3, 0)  path=E
+[blocked] ไม่เดินไป E: ToF 881mm=. vs Sharp 293mm=W ขัดกัน -> UNKNOWN -> replan
+recheck wall at (2, 0) toward E
+[goto] GOTO (2, 0) from (2, 0)
+[arrived] ARRIVED at (2, 0)
+[recheck] recheck (2, 0)->E: 3/3 open -> OPEN (Sharp 291mm)
+frontier -> (3, 0)  path=E
+frontier -> (3, 1)  path=N
+[chassis] เดินไปทิศ N ไม่ยืนยันว่าสำเร็จ (timeout/ถูกบล็อก) - ตำแหน่งที่บันทึกไว้อาจไม่ตรงกับจริง (explorer จะตรวจซ้ำด้วย ToF)
+[topup] เดิน N ขาด 57mm -> เติม 57mm
+[scan] E: ToF 795/795mm vs Sharp 284/275mm ขัดกัน -> UNKNOWN; W: ToF 1618/1608mm vs Sharp 250/244mm ขัดกัน -> UNKNOWN
+frontier -> (3, 2)  path=N
+[measured_pose] offset from centre dx=44mm dy=124mm
+recheck wall at (3, 2) toward N
+[goto] GOTO (3, 2) from (3, 2)
+[arrived] ARRIVED at (3, 2)
+[recheck] recheck (3, 2)->N: 0/3 open -> WALL
+recheck wall at (3, 2) toward E
+[goto] GOTO (3, 2) from (3, 2)
+[arrived] ARRIVED at (3, 2)
+[recheck] recheck (3, 2)->E: 0/3 open -> WALL (Sharp 165mm)
+recheck wall at (3, 2) toward W
+[goto] GOTO (3, 2) from (3, 2)
+[arrived] ARRIVED at (3, 2)
+[recheck] recheck (3, 2)->W: 0/3 open -> WALL (Sharp 180mm)
+recheck wall at (3, 1) toward E
+[goto] GOTO (3, 1) from (3, 2)
+[scan] W: ToF 1546/1543mm vs Sharp 244/214mm ขัดกัน -> UNKNOWN
+[arrived] ARRIVED at (3, 1)
+[recheck] recheck (3, 1)->E: 3/3 open -> OPEN (Sharp 999mm)
+frontier -> (4, 1)  path=E
+[chassis] เดินไปทิศ E ไม่ยืนยันว่าสำเร็จ (timeout/ถูกบล็อก) - ตำแหน่งที่บันทึกไว้อาจไม่ตรงกับจริง (explorer จะตรวจซ้ำด้วย ToF)
+[gimbal] สั่งไป yaw=-90 แต่มุมจริงยังไม่นิ่ง (อ่านได้ 250.3°) - จะอ่าน ToF ต่อไปเลย ค่าที่ได้อาจไม่แม่น
+[scan] W: ToF 1736/2281mm vs Sharp 234/210mm ขัดกัน -> UNKNOWN
+frontier -> (4, 2)  path=N
+[topup] เดิน N ขาด 82mm -> เติม 82mm
+[topup] เดิน N ขาด 31mm -> เติม 31mm
+frontier -> (4, 3)  path=N
+[measured_pose] offset from centre dx=-18mm dy=69mm
+frontier -> (4, 0)  path=SSS
+[chassis] เดินไปทิศ S ไม่ยืนยันว่าสำเร็จ (timeout/ถูกบล็อก) - ตำแหน่งที่บันทึกไว้อาจไม่ตรงกับจริง (explorer จะตรวจซ้ำด้วย ToF)
+[topup] เดิน S ขาด 326mm -> เติม 200mm
+[topup] เดิน S ขาด 333mm -> เติม 200mm
+[scan] W: ToF 2272/2272mm vs Sharp 230/210mm ขัดกัน -> UNKNOWN
+[measured_pose] offset from centre dx=-11mm dy=145mm
+recheck wall at (3, 1) toward W
+[goto] GOTO (3, 1) from (4, 0)
+[chassis] เดินไปทิศ N ไม่ยืนยันว่าสำเร็จ (timeout/ถูกบล็อก) - ตำแหน่งที่บันทึกไว้อาจไม่ตรงกับจริง (explorer จะตรวจซ้ำด้วย ToF)
+[no_progress] เดินไป N แล้วระยะแทบไม่เปลี่ยน (ก่อน 1974mm หลัง 1824mm) -> ถอยกลับ ไม่นับว่าผ่าน
+[undo] เดินไม่สำเร็จ -> ถอยกลับตาม odometry (-0.18, -0.02) m
+[topup] เดิน N ขาด 32mm -> เติม 32mm
+[scan] W: ToF 2344/2329mm vs Sharp 244/244mm ขัดกัน -> UNKNOWN
+[chassis] เดินไปทิศ W ไม่ยืนยันว่าสำเร็จ (timeout/ถูกบล็อก) - ตำแหน่งที่บันทึกไว้อาจไม่ตรงกับจริง (explorer จะตรวจซ้ำด้วย ToF)
+STOP requested (หุ่นจะหยุดหลังจบก้าวปัจจุบัน)
+[scan] W: ToF 1657/1648mm vs Sharp 276/267mm ขัดกัน -> UNKNOWN
+[end] END cell=(3, 1)  visited 14/20
+สำรวจเสร็จ: 14/20 ช่อง  เริ่ม [0, 0, 'N']  จบ [3, 1, 'W']
+===== Class Work 8 : SLAM - Explore the Unknown World =====
+Grid           : 5 x 4  (cell 0.60 m)
+Start          : cell (0, 0)  heading N
+End            : cell (3, 1)
+Visited cells  : 14 / 20
+Coverage       : 70.0 %
+Map Accuracy   : (no ground truth yet — enter it in the GUI and press Evaluate)
+
+ASCII map ( | --- = wall, ? = unknown, . = visited ):
++---+---+---+---+---+
+|   ?   ?   ?   | . |
++---+---+ ? +---+   +
+| .   . |   | . | . |
++   +   +---+   +   +
+| . | .   . ? .   . |
++   +---+   +   +   +
+| . |   | .   . | . |
++---+---+---+---+---+
+ไฟล์ทั้งหมดอยู่ที่: d:\ROBOT-Final\Final-Robot\slam test backup 27-09\output\run_20260928_000307
+[robot] กำลังเชื่อมต่อ RoboMaster (AP mode) ...
+[gimbal] yaw sign = +1 (รอบ 1/3: สั่ง moveto(yaw=+30) -> มุมเปลี่ยนจริง +30.5°)
+[robot] เชื่อมต่อสำเร็จ พร้อมใช้งาน
+[REAL] เชื่อมต่อหุ่นจริงสำเร็จ: 5x4, เริ่ม (0,0) หัน N
+log -> d:\ROBOT-Final\Final-Robot\slam test backup 27-09\output\run_20260928_001001
+--- CALIBRATE ---
+[CALIBRATE] N: [1410, 1409, 1409, 1407, 1407, 1407, 1407]mm -> median=1407mm (ต่ำสุด-สูงสุด 1407-1410mm)
+[CALIBRATE] E: [216, 216, 216, 215, 215, 215, 215]mm -> median=215mm (ต่ำสุด-สูงสุด 215-216mm)
+[CALIBRATE] S: [287, 287, 287, 287, 287, 287, 287]mm -> median=287mm (ต่ำสุด-สูงสุด 287-287mm)
+[CALIBRATE] W: [199, 199, 199, 199, 199, 199, 199]mm -> median=199mm (ต่ำสุด-สูงสุด 199-199mm)
+ตั้ง WALL_EXPECT_MM=207, WALL_THRESHOLD_MM=447 (mm จริง, จากคู่กำแพงตรงข้าม 1 คู่ — ใช้ในรอบนี้)
+[CALIBRATE] Sharp R (E) = 165mm, หุ่นเยื้อง -8mm -> ตั้ง SHARP_R_EXPECT_MM=157
+[CALIBRATE] Sharp L (W) = 150mm, หุ่นเยื้อง +8mm -> ตั้ง SHARP_L_EXPECT_MM=158
+--- CALIBRATE ---
+[CALIBRATE] N: [1465, 1465, 1468, 1468, 1468, 1468, 1468]mm -> median=1468mm (ต่ำสุด-สูงสุด 1465-1468mm)
+[CALIBRATE] E: [222, 222, 222, 222, 221, 221, 221]mm -> median=222mm (ต่ำสุด-สูงสุด 221-222mm)
+[CALIBRATE] S: [199, 199, 199, 199, 199, 199, 199]mm -> median=199mm (ต่ำสุด-สูงสุด 199-199mm)
+[CALIBRATE] W: [204, 204, 204, 204, 202, 202, 202]mm -> median=204mm (ต่ำสุด-สูงสุด 202-204mm)
+ตั้ง WALL_EXPECT_MM=213, WALL_THRESHOLD_MM=453 (mm จริง, จากคู่กำแพงตรงข้าม 1 คู่ — ใช้ในรอบนี้)
+[CALIBRATE] Sharp R (E) = 167mm, หุ่นเยื้อง -9mm -> ตั้ง SHARP_R_EXPECT_MM=158
+[CALIBRATE] Sharp L (W) = 150mm, หุ่นเยื้อง +9mm -> ตั้ง SHARP_L_EXPECT_MM=159
+--- EXPLORE ---
+[yaw] ตั้งมุมอ้างอิง = -1.6°
+[start] START cell=(0, 0) heading=N
+frontier -> (0, 1)  path=N
+frontier -> (0, 2)  path=N
+frontier -> (1, 2)  path=E
+frontier -> (1, 1)  path=S
+[scan] E: ToF 2284/2234mm vs Sharp 213/209mm ขัดกัน -> UNKNOWN
+recheck wall at (1, 1) toward E
+[goto] GOTO (1, 1) from (1, 1)
+[arrived] ARRIVED at (1, 1)
+[recheck] recheck (1, 1)->E: 3/3 open -> OPEN (Sharp 209mm)
+frontier -> (2, 1)  path=E
+[scan] E: ToF 1452/1457mm vs Sharp 237/227mm ขัดกัน -> UNKNOWN
+frontier -> (2, 0)  path=S
+frontier -> (3, 0)  path=E
+[blocked] ไม่เดินไป E: ToF 823mm=. vs Sharp 293mm=W ขัดกัน -> UNKNOWN -> replan
+recheck wall at (2, 0) toward E
+[goto] GOTO (2, 0) from (2, 0)
+[arrived] ARRIVED at (2, 0)
+[recheck] recheck (2, 0)->E: 3/3 open -> OPEN (Sharp 293mm)
+frontier -> (3, 0)  path=E
+frontier -> (3, 1)  path=N
+[topup] เดิน N ขาด 73mm -> เติม 73mm
+[scan] W: ToF 1640/1641mm vs Sharp 244/234mm ขัดกัน -> UNKNOWN
+frontier -> (3, 2)  path=N
+frontier -> (4, 1)  path=SE
+[scan] W: ToF 1651/1640mm vs Sharp 257/239mm ขัดกัน -> UNKNOWN
+[chassis] เดินไปทิศ E ไม่ยืนยันว่าสำเร็จ (timeout/ถูกบล็อก) - ตำแหน่งที่บันทึกไว้อาจไม่ตรงกับจริง (explorer จะตรวจซ้ำด้วย ToF)
+[scan] W: ToF 2513/2508mm vs Sharp 230/214mm ขัดกัน -> UNKNOWN
+frontier -> (4, 2)  path=N
+[chassis] เดินไปทิศ N ไม่ยืนยันว่าสำเร็จ (timeout/ถูกบล็อก) - ตำแหน่งที่บันทึกไว้อาจไม่ตรงกับจริง (explorer จะตรวจซ้ำด้วย ToF)
+[topup] เดิน N ขาด 138mm -> เติม 138mm
+[topup] เดิน N ขาด 140mm -> เติม 140mm
+[measured_pose] offset from centre dx=-85mm dy=-0mm
+frontier -> (4, 3)  path=N
+[measured_pose] offset from centre dx=-89mm dy=9mm
+frontier -> (4, 0)  path=SSS
+[measured_pose] offset from centre dx=83mm dy=-0mm
+[chassis] เดินไปทิศ S ไม่ยืนยันว่าสำเร็จ (timeout/ถูกบล็อก) - ตำแหน่งที่บันทึกไว้อาจไม่ตรงกับจริง (explorer จะตรวจซ้ำด้วย ToF)
+[topup] เดิน S ขาด 137mm -> เติม 137mm
+[topup] เดิน S ขาด 133mm -> เติม 133mm
+[scan] W: ToF 2367/2352mm vs Sharp 196/193mm ขัดกัน -> UNKNOWN
+[scan] W: ToF 397/396mm vs Sharp 999/999mm ขัดกัน -> UNKNOWN
+recheck wall at (3, 1) toward W
+[goto] GOTO (3, 1) from (4, 0)
+[topup] เดิน N ขาด 60mm -> เติม 60mm
+[scan] W: ToF 2440/2432mm vs Sharp 210/197mm ขัดกัน -> UNKNOWN
+[scan] W: ToF 1683/1674mm vs Sharp 259/234mm ขัดกัน -> UNKNOWN
+[arrived] ARRIVED at (3, 1)
+[recheck] recheck (3, 1)->W: 3/3 open -> OPEN (Sharp 235mm)
+recheck wall at (2, 1) toward N
+[goto] GOTO (2, 1) from (3, 1)
+[scan] E: ToF 1410/1404mm vs Sharp 237/232mm ขัดกัน -> UNKNOWN
+[measured_pose] offset from centre dx=-0mm dy=-114mm
+[arrived] ARRIVED at (2, 1)
+[recheck] recheck (2, 1)->N: 0/3 open -> WALL
+recheck wall at (1, 1) toward S
+[goto] GOTO (1, 1) from (2, 1)
+[scan] E: ToF 2350/2382mm vs Sharp 213/213mm ขัดกัน -> UNKNOWN
+[measured_pose] offset from centre dx=77mm dy=-1mm
+[arrived] ARRIVED at (1, 1)
+[recheck] recheck (1, 1)->S: 0/3 open -> WALL
+recheck wall at (1, 2) toward N
+[goto] GOTO (1, 2) from (1, 1)
+[arrived] ARRIVED at (1, 2)
+[recheck] recheck (1, 2)->N: 0/3 open -> WALL
+recheck wall at (1, 2) toward E
+[goto] GOTO (1, 2) from (1, 2)
+[arrived] ARRIVED at (1, 2)
+[recheck] recheck (1, 2)->E: 0/3 open -> WALL (Sharp 179mm)
+recheck wall at (0, 2) toward N
+[goto] GOTO (0, 2) from (1, 2)
+[scan] E: ToF 845/844mm vs Sharp 293/293mm ขัดกัน -> UNKNOWN
+[arrived] ARRIVED at (0, 2)
+[recheck] recheck (0, 2)->N: 0/3 open -> WALL
+recheck wall at (0, 0) toward E
+[goto] GOTO (0, 0) from (0, 2)
+[measured_pose] offset from centre dx=81mm dy=88mm
+[arrived] ARRIVED at (0, 0)
+[recheck] recheck (0, 0)->E: 0/3 open -> WALL (Sharp 156mm)
+recheck wall at (2, 0) toward W
+[goto] GOTO (2, 0) from (0, 0)
+STOP requested (หุ่นจะหยุดหลังจบก้าวปัจจุบัน)
+[end] END cell=(0, 1)  visited 14/20
+สำรวจเสร็จ: 14/20 ช่อง  เริ่ม [0, 0, 'N']  จบ [0, 1, 'N']
+===== Class Work 8 : SLAM - Explore the Unknown World =====
+Grid           : 5 x 4  (cell 0.60 m)
+Start          : cell (0, 0)  heading N
+End            : cell (0, 1)
+Visited cells  : 14 / 20
+Coverage       : 70.0 %
+Map Accuracy   : (no ground truth yet — enter it in the GUI and press Evaluate)
+
+ASCII map ( | --- = wall, ? = unknown, . = visited ):
++---+---+---+---+---+
+|   ?   ?   ?   | . |
++---+---+ ? +---+   +
+| .   . |   | . | . |
++   +   +---+   +   +
+| . | .   .   .   . |
++   +---+   +   +   +
+| . |   | .   . | . |
++---+---+---+---+---+
+ไฟล์ทั้งหมดอยู่ที่: d:\ROBOT-Final\Final-Robot\slam test backup 27-09\output\run_20260928_001001
+--- GOTO (4,0) ---
+[goto] GOTO (4, 0) from (0, 1)
+[scan] E: ToF 880/881mm vs Sharp 284/284mm ขัดกัน -> UNKNOWN
+[measured_pose] offset from centre dx=-86mm dy=-7mm
+[measured_pose] offset from centre dx=48mm dy=81mm
+[chassis] เดินไปทิศ S ไม่ยืนยันว่าสำเร็จ (timeout/ถูกบล็อก) - ตำแหน่งที่บันทึกไว้อาจไม่ตรงกับจริง (explorer จะตรวจซ้ำด้วย ToF)
+[topup] เดิน S ขาด 96mm -> เติม 96mm
+[scan] E: ToF 2351/2309mm vs Sharp 213/209mm ขัดกัน -> UNKNOWN
+[measured_pose] offset from centre dx=18mm dy=138mm
+[scan] E: ToF 1660/1649mm vs Sharp 237/232mm ขัดกัน -> UNKNOWN
+[scan] W: ToF 1552/1554mm vs Sharp 239/205mm ขัดกัน -> UNKNOWN
+[chassis] เดินไปทิศ E ไม่ยืนยันว่าสำเร็จ (timeout/ถูกบล็อก) - ตำแหน่งที่บันทึกไว้อาจไม่ตรงกับจริง (explorer จะตรวจซ้ำด้วย ToF)
+[topup] เดิน E ขาด 48mm -> เติม 48mm
+[scan] W: ToF 2152/2136mm vs Sharp 225/198mm ขัดกัน -> UNKNOWN
+[arrived] ARRIVED at (4, 0)
+[parked] PARKED at (4, 0) heading=N - รอคำสั่ง
+STOP requested (หุ่นจะหยุดหลังจบก้าวปัจจุบัน)
+STOP requested (หุ่นจะหยุดหลังจบก้าวปัจจุบัน)
+GT ใหม่: มีแค่ขอบนอก — เลือกโหมด 'วาด Ground Truth' แล้วคลิกเส้นขอบที่เป็นกำแพงจริง
+บันทึก GT -> D:/ROBOT-Final/Final-Robot/slam test backup 27-09/ground_truth2.json
+===== Class Work 8 : SLAM - Explore the Unknown World =====
+Grid           : 5 x 4  (cell 0.60 m)
+Start          : cell (0, 0)  heading N
+End            : cell (0, 1)
+Visited cells  : 14 / 20
+Coverage       : 70.0 %
+Correct cells  : 11 / 20
+Map Accuracy   : 55.0 %
+Edge accuracy  : 71.43 %  (per wall segment)
+Walls GT/detected/matched : 24 / 31 / 22
+Wrong cells    : [(0, 3), (1, 0), (1, 3), (2, 2), (2, 3), (3, 2), (3, 3), (4, 1), (4, 2)]
+
+ASCII map ( | --- = wall, ? = unknown, . = visited ):
++---+---+---+---+---+
+|   ?   ?   ?   | . |
++---+---+ ? +---+   +
+| .   . |   | . | . |
++   +   +---+   +   +
+| . | .   .   .   . |
++   +---+   +   +   +
+| . |   | .   . | . |
++---+---+---+---+---+
+ไฟล์ทั้งหมดอยู่ที่: d:\ROBOT-Final\Final-Robot\slam test backup 27-09\output\run_20260928_001001

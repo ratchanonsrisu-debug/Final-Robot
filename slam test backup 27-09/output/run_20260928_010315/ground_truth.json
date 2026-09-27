@@ -1,0 +1,298 @@
+{
+ "grid_w": 5,
+ "grid_h": 4,
+ "cell_m": 0.6,
+ "boundary_walls": false,
+ "V_logodds": [
+  [
+   6.0,
+   6.0,
+   6.0,
+   -6.0
+  ],
+  [
+   6.0,
+   6.0,
+   -6.0,
+   -6.0
+  ],
+  [
+   6.0,
+   -6.0,
+   6.0,
+   -6.0
+  ],
+  [
+   -6.0,
+   -6.0,
+   6.0,
+   6.0
+  ],
+  [
+   6.0,
+   -6.0,
+   6.0,
+   6.0
+  ],
+  [
+   6.0,
+   -6.0,
+   6.0,
+   6.0
+  ]
+ ],
+ "H_logodds": [
+  [
+   6.0,
+   -6.0,
+   -6.0,
+   6.0,
+   -6.0
+  ],
+  [
+   -6.0,
+   6.0,
+   -6.0,
+   6.0,
+   -6.0
+  ],
+  [
+   6.0,
+   -6.0,
+   6.0,
+   -6.0,
+   -6.0
+  ],
+  [
+   6.0,
+   -6.0,
+   -6.0,
+   -6.0,
+   -6.0
+  ],
+  [
+   6.0,
+   -6.0,
+   -6.0,
+   -6.0,
+   6.0
+  ]
+ ],
+ "visited": [
+  [
+   false,
+   false,
+   false,
+   false
+  ],
+  [
+   false,
+   false,
+   false,
+   false
+  ],
+  [
+   false,
+   false,
+   false,
+   false
+  ],
+  [
+   false,
+   false,
+   false,
+   false
+  ],
+  [
+   false,
+   false,
+   false,
+   false
+  ]
+ ],
+ "start": null,
+ "end": null,
+ "cells": [
+  {
+   "x": 0,
+   "y": 0,
+   "visited": false,
+   "N": "OPEN",
+   "E": "WALL",
+   "S": "WALL",
+   "W": "WALL"
+  },
+  {
+   "x": 1,
+   "y": 0,
+   "visited": false,
+   "N": "WALL",
+   "E": "WALL",
+   "S": "OPEN",
+   "W": "WALL"
+  },
+  {
+   "x": 2,
+   "y": 0,
+   "visited": false,
+   "N": "OPEN",
+   "E": "OPEN",
+   "S": "WALL",
+   "W": "WALL"
+  },
+  {
+   "x": 3,
+   "y": 0,
+   "visited": false,
+   "N": "OPEN",
+   "E": "WALL",
+   "S": "WALL",
+   "W": "OPEN"
+  },
+  {
+   "x": 4,
+   "y": 0,
+   "visited": false,
+   "N": "OPEN",
+   "E": "WALL",
+   "S": "WALL",
+   "W": "WALL"
+  },
+  {
+   "x": 0,
+   "y": 1,
+   "visited": false,
+   "N": "OPEN",
+   "E": "WALL",
+   "S": "OPEN",
+   "W": "WALL"
+  },
+  {
+   "x": 1,
+   "y": 1,
+   "visited": false,
+   "N": "OPEN",
+   "E": "OPEN",
+   "S": "WALL",
+   "W": "WALL"
+  },
+  {
+   "x": 2,
+   "y": 1,
+   "visited": false,
+   "N": "WALL",
+   "E": "OPEN",
+   "S": "OPEN",
+   "W": "OPEN"
+  },
+  {
+   "x": 3,
+   "y": 1,
+   "visited": false,
+   "N": "OPEN",
+   "E": "OPEN",
+   "S": "OPEN",
+   "W": "OPEN"
+  },
+  {
+   "x": 4,
+   "y": 1,
+   "visited": false,
+   "N": "OPEN",
+   "E": "OPEN",
+   "S": "OPEN",
+   "W": "OPEN"
+  },
+  {
+   "x": 0,
+   "y": 2,
+   "visited": false,
+   "N": "WALL",
+   "E": "OPEN",
+   "S": "OPEN",
+   "W": "WALL"
+  },
+  {
+   "x": 1,
+   "y": 2,
+   "visited": false,
+   "N": "WALL",
+   "E": "WALL",
+   "S": "OPEN",
+   "W": "OPEN"
+  },
+  {
+   "x": 2,
+   "y": 2,
+   "visited": false,
+   "N": "OPEN",
+   "E": "WALL",
+   "S": "WALL",
+   "W": "WALL"
+  },
+  {
+   "x": 3,
+   "y": 2,
+   "visited": false,
+   "N": "OPEN",
+   "E": "WALL",
+   "S": "OPEN",
+   "W": "WALL"
+  },
+  {
+   "x": 4,
+   "y": 2,
+   "visited": false,
+   "N": "OPEN",
+   "E": "WALL",
+   "S": "OPEN",
+   "W": "WALL"
+  },
+  {
+   "x": 0,
+   "y": 3,
+   "visited": false,
+   "N": "OPEN",
+   "E": "OPEN",
+   "S": "WALL",
+   "W": "OPEN"
+  },
+  {
+   "x": 1,
+   "y": 3,
+   "visited": false,
+   "N": "OPEN",
+   "E": "OPEN",
+   "S": "WALL",
+   "W": "OPEN"
+  },
+  {
+   "x": 2,
+   "y": 3,
+   "visited": false,
+   "N": "OPEN",
+   "E": "WALL",
+   "S": "OPEN",
+   "W": "OPEN"
+  },
+  {
+   "x": 3,
+   "y": 3,
+   "visited": false,
+   "N": "OPEN",
+   "E": "WALL",
+   "S": "OPEN",
+   "W": "WALL"
+  },
+  {
+   "x": 4,
+   "y": 3,
+   "visited": false,
+   "N": "WALL",
+   "E": "WALL",
+   "S": "OPEN",
+   "W": "WALL"
+  }
+ ],
+ "meta": {}
+}

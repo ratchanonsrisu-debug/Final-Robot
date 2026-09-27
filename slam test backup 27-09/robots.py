@@ -57,6 +57,9 @@ class SimRobot:
     def odom_xy(self):
         return self.est_xy()
 
+    def odom_world(self):
+        return self.est_xy()
+
     def yaw(self):
         return self._yaw
 
@@ -64,6 +67,7 @@ class SimRobot:
         self.cell = (cx, cy)
         self.heading = dir_index(heading)
         self.off = [0.0, 0.0]
+        self.odo_ref = [None, None]
 
     # ---------- sensors ----------
     def _true_open_distance_mm(self, x, y, d):
@@ -134,6 +138,10 @@ class SimRobot:
     def undo_last_move(self):
         pass                    # จำลอง: move_cell สำเร็จเสมอ ไม่มีอะไรต้องย้อน
 
+    def face(self, heading):
+        self._yaw = 0.0
+        self.heading = dir_index(heading)
+
     def close(self):
         pass
 
@@ -200,6 +208,7 @@ class RealRobot:
         #: จะดึงมุมกลับมาที่ self._yaw0 เสมอ, odom_xy() รายงานเทียบจาก self._pos0
         self._yaw0 = self._yaw
         self._pos0 = self._pos
+        self._odom_h0 = self.body_heading
         self.log("[robot] เชื่อมต่อสำเร็จ พร้อมใช้งาน")
 
     # ---------- callbacks (เธรดของ DDS) ----------
@@ -225,6 +234,15 @@ class RealRobot:
     def odom_xy(self):
         return (self._pos[0] - self._pos0[0], self._pos[1] - self._pos0[1])
 
+    def odom_world(self):
+        """(ตะวันออก, เหนือ) เมตร จาก odometry — กรอบ odometry คือ (หน้า, ขวา) ของตัวถัง
+        ตอนตั้ง _pos0 (log 28/9: หัน N แล้วเดิน E -> odom y เพิ่ม = ขวา)"""
+        f, r = self.odom_xy()
+        f, r = f / C.ODOM_SCALE_FWD, r / C.ODOM_SCALE_STRAFE
+        h = self._odom_h0
+        r_h = (h + 1) % 4
+        return (f * DX[h] + r * DX[r_h], f * DY[h] + r * DY[r_h])
+
     def yaw(self):
         return self._yaw
 
@@ -236,6 +254,8 @@ class RealRobot:
         self.off = [0.0, 0.0]
         self._yaw0 = self._yaw
         self._pos0 = self._pos
+        self._odom_h0 = self.body_heading
+        self.odo_ref = [None, None]
 
     # ---------- ToF / gimbal ----------
     def _calibrate_gimbal_yaw_sign(self):
@@ -427,7 +447,33 @@ class RealRobot:
     def reset_heading_ref(self):
         """ใช้มุมตอนนี้เป็นทิศอ้างอิง (เรียกตอนเริ่มสำรวจ - ผู้ใช้วางหุ่นตรงกับกริดแล้ว)"""
         self._yaw0 = self._yaw
+        self._yaw_start = self._yaw
+        self._body_start = self.body_heading
         self.log(f"[yaw] ตั้งมุมอ้างอิง = {self._yaw0:.1f}°")
+
+    def face(self, heading):
+        """จอด: หันตัวถังกลับทิศเดียวกับตอนเริ่มสำรวจ + gimbal ชี้หน้า (ใช้หลังกลับถึงจุดเริ่ม)
+        strafe: ตัวถังไม่เคยหมุน แค่แก้ yaw ให้ตรงมุมอ้างอิงเดิม
+        rotate: หมุนตัวถังกลับทิศเริ่ม แล้วใช้มุม IMU ตอนเริ่มเป็นอ้างอิง (ไม่สะสม error จากการเลี้ยว)"""
+        h = dir_index(heading)
+        if C.MOVE_MODE == "rotate" and h != self.body_heading:
+            deg = {1: -90.0, 2: 180.0, 3: 90.0}[(h - self.body_heading) % 4]
+            self._rotate_raw(deg)
+            self.body_heading = h
+            self._yaw0 = self._yaw
+        if getattr(self, "_body_start", None) == self.body_heading:
+            self._yaw0 = self._yaw_start
+        for _ in range(3):
+            if abs(_ang_diff(self._yaw0, self._yaw)) < C.YAW_TOLERANCE_DEG:
+                break
+            self.correct_yaw()
+            time.sleep(0.2)
+        try:
+            self._ep.gimbal.moveto(pitch=C.GIMBAL_PITCH, yaw=0,
+                                   yaw_speed=C.GIMBAL_YAW_SPEED).wait_for_completed(timeout=4.0)
+        except Exception as e:                              # noqa: BLE001
+            self.log(f"[gimbal] recenter ล้มเหลว: {e}")
+        self.heading = h
 
     def undo_last_move(self):
         """ถอยกลับตามระยะที่ odometry วัดได้จริงตั้งแต่เริ่ม move_cell ล่าสุด
