@@ -1,0 +1,9 @@
+step,x,y,heading,tof_front_mm,tof_right_mm,tof_back_mm,tof_left_mm,wall_N,wall_E,wall_S,wall_W,adc_left,adc_right,center_iters,center_err,kind,target,ok,reason,impact,slip,cam_white_pct
+0,0,0,N,856,168,199,148,0,1,1,1,562,409,6,153,go,"(0, 1)",True,tof_emergency,False,False,0.44140624999999994
+1,0,1,N,60,891,1003,115,1,0,0,1,231,335,6,-258,go,"(1, 1)",False,safety_wall,False,False,
+2,0,1,E,308,153,742,898,1,1,1,1,294,272,6,226,back,"(0, 0)",False,ir_estop,False,False,43.602864583333336
+3,0,1,S,750,175,342,846,1,1,1,1,381,673,6,45,back,"(0, 0)",False,ir_estop,False,False,16.399739583333332
+4,0,1,S,597,147,496,842,1,1,1,1,439,519,2,-15,back,"(0, 0)",False,ir_estop,False,False,0.12152777777777778
+5,0,1,S,485,198,611,123,1,1,0,1,490,454,6,42,back,"(0, 0)",False,safety_wall,False,False,
+6,0,1,S,316,172,776,156,0,1,1,1,644,370,6,274,go,"(0, 2)",True,odometry,False,False,0.5503472222222222
+7,0,2,N,210,954,852,60,1,0,0,1,247,459,6,-241,go,"(1, 2)",False,safety_wall,False,False,

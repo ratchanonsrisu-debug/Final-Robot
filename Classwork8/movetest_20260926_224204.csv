@@ -1,0 +1,4 @@
+leg,kind,commanded,before_x,before_y,before_yaw,after_x,after_y,after_yaw,moved_m,yaw_delta_deg,error,move_ok,elapsed_s
+0,forward,0.6,-0.0,-0.0,-0.69,0.5771,-0.0129,-0.63,0.5772,0.06,-0.0228,0,5.401
+1,turn,-90.0,0.5971,-0.0129,-0.57,0.6043,-0.0091,88.98,0.0082,89.55,179.55,1,2.03
+2,forward,0.6,0.6046,-0.0124,88.99,0.5387,0.3672,89.0,0.3853,0.01,-0.2147,0,5.41

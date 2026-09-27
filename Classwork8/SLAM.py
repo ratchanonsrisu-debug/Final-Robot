@@ -3,19 +3,43 @@
 โหมดการทำงาน
 ------------
 สำรวจเขาวงกตที่ไม่รู้จักแผนที่มาก่อนให้ครบทุกช่องที่ไปถึงได้ (full-coverage
-exploration ด้วย DFS + backtrack ไม่ใช่ Flood Fill ไปเป้าหมายเดียวแบบเดิม)
-สร้าง occupancy map จากเซนเซอร์ระหว่างทาง จบภารกิจแล้วรายงานตำแหน่งเริ่ม/จบ
-พร้อม export แผนที่ / log การสำรวจ / trajectory ออกเป็นไฟล์
+exploration ด้วย DFS + backtrack) สร้าง occupancy map จากเซนเซอร์ระหว่างทาง
+จบภารกิจแล้วรายงานตำแหน่งเริ่ม/จบ พร้อม export แผนที่ / log การสำรวจ /
+trajectory ออกเป็นไฟล์
 
-ฮาร์ดแวร์ที่ต้องต่อ
-------------------
-- ToF (Distance Sensor) ด้านหน้า        -> sensor.sub_distance() (ติดอยู่บน
-  gimbal จริง ไม่ใช่ยึดตายกับแชสซี ต้อง recenter gimbal ค้างไว้ตอนเริ่มงาน
-  แล้วห้ามสั่งขยับอีกเลย ไม่งั้นค่า "หน้า" จะไม่ตรงกับทิศหัวรถจริงแบบเงียบ ๆ)
-- Sharp IR analog ซ้าย                  -> sensor adaptor hub 2 port 1 (ADC)
-- Sharp IR analog ขวา                   -> sensor adaptor hub 1 port 1 (ADC)
-- IR digital 45 องศา ซ้าย               -> sensor adaptor hub 4 port 1 (IO)
-- IR digital 45 องศา ขวา                -> sensor adaptor hub 3 port 1 (IO)
+สถาปัตยกรรมที่ตกลงกันไว้ (เวอร์ชันนี้ ต่างจากฉบับแรก)
+-----------------------------------------------------
+- **ToF บน gimbal คือความจริงหนึ่งเดียวเรื่องกำแพง** หมุน gimbal สแกนครบ 4 ทิศ
+  (หน้า/ขวา/หลัง/ซ้าย) ทุกครั้งที่จอดในช่องใหม่ ก่อนหน้านี้ gimbal ถูกล็อกหน้า
+  ตลอดภารกิจ - เวอร์ชันนี้เลิกทำแบบนั้นแล้ว เพราะไม่มีทางเห็นกำแพงข้าง/หลังได้
+  ถ้าไม่หมุน
+- **Sharp ซ้าย/ขวา (ข้างละ 1 ตัว) ใช้เพื่อ "จัดกึ่งกลางซ้าย-ขวาตอนจอด" เท่านั้น**
+  ไม่ใช่ตัวตัดสินกำแพง (ToF ตัดสินกำแพงล้วน ๆ) และไม่ทำงานระหว่างเดินหน้าเลย
+- **IR 45 องศา 2 ตัว (ทแยงซ้าย-หน้า/ขวา) เป็นตัวกระตุ้น emergency-stop ระหว่าง
+  เดินหน้าเข้าช่องใหม่เท่านั้น** ไม่ใช้ตัดสินกำแพง ไม่ทำงานตอนจอด
+- **ห้ามมีการปรับทิศ/ตำแหน่งด้วยเซนเซอร์ใด ๆ ระหว่างเดินหน้าเข้าช่องเด็ดขาด**
+  (ตกลงกับผู้ใช้ชัดเจนหลังพบว่าเวอร์ชันก่อนหน้า - ดู
+  ``Occupancy110.py``/``occupancy110-lateral-hold`` - เคยลองใส่ Sharp-skew→yaw
+  ระหว่างเดินหน้าแล้วไปหักล้างกับ IMU yaw-hold จนดริฟท์ไม่จบสิ้น) เดินหน้าเข้า
+  ช่องใหม่ทั้งหมดเป็นความเร็วคงที่ค่าเดียว ปรับได้แค่ตอนจอดนิ่งเท่านั้น
+- **การหมุนเลี้ยวใช้ ``chassis.move(z=)`` ก้อนเดียวยืนยันจากเฟิร์มแวร์** (แม่น,
+  เสี่ยงชนต่ำ เพราะเกิดขึ้นตอนอยู่กลางช่องที่จัดตำแหน่งแล้ว)
+- **เดินหน้าเข้าช่องใหม่ใช้ ``chassis.drive_speed()`` ความเร็วคงที่ค่าเดียว**
+  (ไม่ใช่ ``chassis.move()``) เพราะ ``chassis.move()`` ของ SDK ตัวนี้ไม่มีทาง
+  ยกเลิกกลางทางได้เลย ส่วน ``drive_speed`` สั่ง 0 แทรกแล้วหยุดจริงทันที จึงเป็น
+  ทางเดียวที่ IR/impact จะ "หยุดหุ่นได้จริง" ไม่ใช่ best-effort
+- **การจัดกึ่งกลางช่องใช้ ``chassis.move()`` ทีละก้อน** อ่าน-ตัดสินใจ-ขยับ-อ่านใหม่
+  เหมือนเดิม (front-back ด้วย ToF ที่สแกนไปแล้ว, ซ้าย-ขวาด้วย Sharp)
+
+ฮาร์ดแวร์ที่ต้องต่อ (อัปเดตตามสายจริงที่ต่อในเครื่อง)
+------------------------------------------------------
+- ToF (Distance Sensor)                 -> sensor.sub_distance() ติดบน gimbal
+  หมุนได้เต็มที่ (gimbal.moveto ก่อนอ่านทุกทิศ แล้วชี้หน้ากลับก่อนออกเดินเสมอ)
+- Sharp IR analog ซ้าย                  -> sensor adaptor hub 3 port 1 (ADC)
+- Sharp IR analog ขวา                   -> sensor adaptor hub 2 port 2 (ADC)
+- IR digital 45 องศา ซ้าย-หน้า          -> sensor adaptor hub 1 port 1 (IO)
+- IR digital 45 องศา ขวา                -> sensor adaptor hub 2 port 1 (IO)
+- Camera ต่อไว้เฉยๆ ไม่ใช้ในตรรกะการสำรวจ/สร้างแผนที่เลย (ตกลงกับผู้ใช้แล้ว)
 
 วิธีใช้
 ------
@@ -28,24 +52,39 @@ exploration ด้วย DFS + backtrack ไม่ใช่ Flood Fill ไปเ
 1. ``chassis.move(z=)`` กับ ``chassis.drive_speed(z=)`` ใช้เครื่องหมายตรงข้ามกัน
    ตัวอย่างทางการ examples/02_chassis/01_move.py ระบุ ``move(z=+90)`` = เลี้ยวซ้าย
    ส่วน examples/02_chassis/03_speed.py ระบุ ``drive_speed(z=+30)`` = เลี้ยวขวา
-   ไฟล์นี้จึงใช้ ``drive_speed`` สำหรับการหมุน "เท่านั้น" ไม่แตะ ``move(z=)`` เลย
-2. ``sensor_adaptor.get_adc()`` / ``get_io()`` เป็น blocking round-trip ที่มี
+   ไฟล์นี้ใช้ ``move(z=)`` สำหรับเลี้ยว และ ``drive_speed(x=)`` (ไม่มี z) สำหรับ
+   เดินหน้าเข้าช่องใหม่ - ไม่มีจุดไหนใช้ ``drive_speed(z=)`` เลยจึงไม่ต้องกังวล
+   เรื่องเครื่องหมายสลับกันของสองคำสั่งนี้อีก
+2. ``chassis.move()`` **ไม่มี abort ใน SDK** ยกเลิกกลางทางไม่ได้เลย - เหตุผลที่
+   การเดินหน้าเข้าช่องใหม่ (จุดเสี่ยงชนที่สุด) ใช้ ``drive_speed()`` แทน เพราะ
+   สั่ง 0 แทรกได้จริงและหยุดจริงทันที ไม่ใช่ best-effort
+3. ``sensor_adaptor.get_adc()`` / ``get_io()`` เป็น blocking round-trip ที่มี
    timeout 3 วินาที (client.py ``send_sync_msg``) เรียกใน control loop ไม่ได้
    จึงใช้ ``sensor_adaptor.sub_adapter()`` แบบ push แทน และเหลือ get_adc ไว้เป็น
    fallback กรณี sub_adapter ไม่ส่งข้อมูลมาเท่านั้น
-3. ค่าที่ ``sub_adapter`` คืนมาเป็น ADC ดิบสเกลเดียวกับ ``get_adc`` (uint16 ทั้งคู่
+4. ค่าที่ ``sub_adapter`` คืนมาเป็น ADC ดิบสเกลเดียวกับ ``get_adc`` (uint16 ทั้งคู่
    ดู protocol.py:1954 เทียบกับ sensor.py:75) สลับไปมาได้โดยค่าไม่เพี้ยน
-4. ``sensor_adaptor.start()`` เป็น no-op (module.py ``Module.start`` = pass)
-5. ``robot.initialize()`` เรียก ``set_robot_mode(FREE)`` ให้อยู่แล้ว
+5. ``sensor_adaptor.start()`` เป็น no-op (module.py ``Module.start`` = pass)
+6. ``robot.initialize()`` เรียก ``set_robot_mode(FREE)`` ให้อยู่แล้ว แต่ gimbal ใน
+   FREE mode **ไม่ตามแชสซีหมุนอัตโนมัติ** ต้องสั่ง ``point_gimbal`` ชี้หน้าซ้ำ
+   ทุกครั้งหลังหมุนแชสซี ไม่งั้น ToF จะชี้ผิดทิศแบบเงียบ ๆ
+7. ToF อ่านได้ ``0`` หรือ ``< TOF_BLIND_ZONE_MM`` (~60mm) แปลว่า "ชิดวัตถุมาก
+   จนสะท้อนไม่ทัน (blind zone)" ต้องตีความว่า **มีกำแพงชัวร์** ห้ามตีความว่า
+   "ไม่มีข้อมูล/ไม่มีอะไรในระยะ" (บั๊กที่เจอจาก ``IR_6/sensors.py`` ของแล็บก่อน
+   หน้า ถ้าตีความผิดจะทำให้หุ่นคิดว่าโล่งทั้งที่ชนกำแพงอยู่)
 """
 
 import argparse
 import csv
+import glob
+import json
 import math
+import os
 import statistics
 import sys
 import threading
 import time
+import traceback
 from collections import deque
 from datetime import datetime
 
@@ -57,6 +96,11 @@ except ImportError as exc:  # โหมด --sim ทดสอบตรรกะ�
     ROBOT_IMPORT_ERROR = exc
 else:
     ROBOT_IMPORT_ERROR = None
+
+try:
+    import cv2                  # noqa: ใช้แค่คำนวณ % พิกเซลขาวจากกล้อง (log-only)
+except ImportError:
+    cv2 = None
 
 
 # =====================================================================
@@ -76,81 +120,117 @@ START_HEADING = 0               # 0=North 1=East 2=South 3=West
 # (ด้านที่จริง ๆ ยังตันก็จะถูกมาร์กเป็นกำแพงตามปกติจากการสแกน ไม่ต่างจากขอบอื่น)
 BORDER_OPENINGS = [(3, 4, 0), (3, 4, 1)]
 
-# ---------- การต่อสายเซนเซอร์ ----------
-TOF_INDEX = 0                   # sub_distance คืน list 4 ตัว ใช้ตัวไหนเป็นด้านหน้า
-SHARP_LEFT = (2, 1)             # (hub_id, port) อ่านด้วย ADC
-SHARP_RIGHT = (1, 1)            # (hub_id, port) อ่านด้วย ADC
-IR_LEFT_45 = (4, 1)             # (hub_id, port) อ่านด้วย IO (digital 0/1)
-IR_RIGHT_45 = (3, 1)            # (hub_id, port) อ่านด้วย IO (digital 0/1)
+# ---------- การต่อสายเซนเซอร์ (อัปเดตตามสายจริงที่ต่อในเครื่อง) ----------
+TOF_INDEX = 0                   # sub_distance คืน list 4 ตัว ใช้ตัวไหน (ToF อยู่บน gimbal)
+SHARP_LEFT = (3, 1)             # (hub_id, port) อ่านด้วย ADC - ใช้จัดกึ่งกลางตอนจอดเท่านั้น
+SHARP_RIGHT = (2, 2)            # (hub_id, port) อ่านด้วย ADC - ใช้จัดกึ่งกลางตอนจอดเท่านั้น
+IR_LEFT_45 = (1, 1)             # (hub_id, port) อ่านด้วย IO - ทแยงซ้าย-หน้า, e-stop ระหว่างเดินหน้าเท่านั้น
+IR_RIGHT_45 = (2, 1)            # (hub_id, port) อ่านด้วย IO - ทแยงขวา, e-stop ระหว่างเดินหน้าเท่านั้น
 
 # ---------- ค่าที่ได้จาก `--calib` เท่านั้น ห้ามเดา ----------
 # ตราบใดที่ยังเป็น None โปรแกรมจะปฏิเสธที่จะวิ่งในสนามจริง
 # เหตุผล: threshold ที่ผิดทำให้หุ่น "วิ่งดูปกติทุกอย่างแต่สร้างแผนที่ผิด"
 # ซึ่งแยกไม่ออกจากบั๊กของ odometry หรือของ flood fill ตอนอยู่หน้าสนาม
-SHARP_LEFT_WALL_ADC = (374, 352)      # (enter, exit) ทำ hysteresis กันค่ากระพริบ
-SHARP_RIGHT_WALL_ADC = (374, 351)     # (enter, exit)
-SHARP_LEFT_REF = 350           # ค่า ADC ซ้าย ตอนหุ่นอยู่กลางช่องพอดี
-SHARP_RIGHT_REF = 350          # ค่า ADC ขวา ตอนหุ่นอยู่กลางช่องพอดี
-IR_TRIGGERED_VALUE = 0       # ค่า IO ตอนมีสิ่งกีดขวาง (0 หรือ 1)
-FRONT_STOP_MM = 116            # ToF ที่อ่านได้ตอนหุ่นอยู่กลางช่องและหันชนกำแพง
+FRONT_STOP_MM                 = 140
+SIDE_STOP_MM                  = 142
+SHARP_LEFT_REF                = 495
+SHARP_RIGHT_REF               = 504
+SHARP_LEFT_CLOSER_IS_HIGHER   = True
+SHARP_RIGHT_CLOSER_IS_HIGHER  = True
+IR_TRIGGERED_VALUE            = 1  # ค่า IO ตอนมีสิ่งกีดขวาง (0 หรือ 1) ใช้ร่วมกันทั้ง 2 ตัว
 
 FRONT_WALL_MM_OVERRIDE = None   # ปกติปล่อย None ให้คำนวณจากเรขาคณิตของช่อง
 
-# ---------- เกณฑ์ตรวจกำแพง ----------
-TOF_MAX_VALID_MM = 4000         # เกินนี้ถือว่าอ่านไม่ได้ / ไม่มีอะไรอยู่ในระยะ
-WALL_VOTE_SAMPLES = 5           # อ่านกี่ครั้งตอนจอดนิ่ง ก่อนโหวตลงแผนที่
-WALL_VOTE_INTERVAL = 0.06
+# ---------- เกณฑ์ตรวจกำแพง (ToF คือความจริงหนึ่งเดียว) ----------
+TOF_MAX_VALID_MM = 4000         # เกินนี้ถือว่าอ่านไม่ได้ / ไม่มีอะไรอยู่ในระยะ (โล่ง)
+TOF_BLIND_ZONE_MM = 60          # ต่ำกว่านี้ = ชิดวัตถุมากจนสะท้อนไม่ทัน -> ถือเป็นกำแพงชัวร์เสมอ
+TOF_SAMPLES = 7                 # จำนวนตัวอย่างต่อการอ่าน 1 ทิศ (หุ่นหยุดนิ่งตอนอ่านทุกครั้ง)
+TOF_SAMPLE_INTERVAL = 0.05
+TOF_OUTLIER_MM = 80             # ตัวอย่างที่เบี่ยงจาก median เกินนี้ถือว่าเป็น glitch ตัดทิ้ง
+TOF_MIN_VALID_SAMPLES_FRAC = 0.5
+WALL_OPEN_CONFIRM_STREAK = 3    # ต้องเจอ "โล่ง" ติดกันกี่ครั้งจึงจะลบกำแพงที่เคยมาร์กไว้ออก
+                                 # (เพิ่มกำแพงได้ทันทีเมื่อเจอ 1 ครั้ง แต่ลบต้องยืนยันหนักแน่นกว่า
+                                 # - กันกำแพงผีค้างถาวรจาก glitch ตอนต้น โดยไม่ทำให้แผนที่แกว่ง)
+EMERGENCY_STOP_MM = 80          # ตอนเดินหน้า: ToF หน้าต่ำกว่านี้ = หยุดฉุกเฉินทันที (คนละเกณฑ์กับ
+                                 # การจัดกึ่งกลาง เป็นแค่ตัวกันชนสุดท้ายระหว่างทาง)
 
-# ---------- IR 45 องศา ----------
-# ใช้เป็นตัวกันชนจุดบอดทแยงหน้า (Sharp ยิงตรงข้าง ToF ยิงตรงหน้า มุมทแยงไม่มีใครดู)
-# ไม่ใช้เป็นตัวตัดสินใจว่ามีกำแพงหรือไม่ และไม่ใช้จบการเคลื่อนที่
-USE_IR_AS_GUARD = True          # ติด -> ชะลอความเร็ว + เบี่ยงหนีเล็กน้อย
-USE_IR_AS_SLANT = False         # ติดข้างเดียว -> เดาว่าเข้าช่องเอียง แล้วแก้ yaw
-IR_SLANT_BIAS_DEG = 4.0         # องศาที่เอียงเป้าหมายหนีเมื่อเปิด USE_IR_AS_SLANT
-GUARD_STRAFE = 0.05             # m/s เบี่ยงหนีเมื่อ IR guard ติดข้างเดียว
+# ---------- gimbal (สแกน ToF 4 ทิศ) ----------
+GIMBAL_PITCH = 0
+GIMBAL_YAW_SPEED = 80.0         # deg/s - ตั้งใจให้ช้ากว่าเดิม ไม่ต้องรีบ เน้นอ่านนิ่ง/แม่น
+GIMBAL_SETTLE_S = 0.25          # รอเพิ่มหลัง wait_for_completed ก่อนเริ่มอ่าน
+GIMBAL_YAW_FRONT = 0
+GIMBAL_YAW_LEFT = 90            # +yaw = ซ้าย (อ้างอิงจาก examples/03_gimbal/01_move.py)
+GIMBAL_YAW_RIGHT = -90
+GIMBAL_YAW_BACK = 180
+#: tuple: ลำดับสแกน (ทิศสัมพัทธ์ 0=หน้า 1=ขวา 2=หลัง 3=ซ้าย, มุม gimbal, ชื่อ)
+SCAN_PLAN = (
+    (0, GIMBAL_YAW_FRONT, "front"),
+    (1, GIMBAL_YAW_RIGHT, "right"),
+    (2, GIMBAL_YAW_BACK, "back"),
+    (3, GIMBAL_YAW_LEFT, "left"),
+)
+
+# ---------- IR 45 องศา (e-stop ระหว่างเดินหน้าเท่านั้น ไม่เกี่ยวกับแผนที่/ตอนจอดเลย) ----------
+IR_ESTOP_ENABLED = True
+
+# ---------- Camera (log-only - "กำแพงสนามแข่งเป็นสีขาว") ----------
+# ตกลงกับผู้ใช้แล้ว: กล้อง "ไม่มีผลต่อการตัดสินใจ/หยุดใด ๆ เลย" ToF ยังคุม
+# กำแพง/e-stop 100% เหมือนเดิมทุกประการ กล้องแค่ถ่ายรูป + คำนวณ % พิกเซลขาวไว้
+# ให้คนดูย้อนหลัง เผื่อวันหลังอยากเปิดเป็น veto เสริมเมื่อเห็นว่าแยกขาว/ไม่ขาว
+# ได้ชัดเจนจริงในแสงสนามแข่งจริง (ไม่ใช่แค่แสงตอนซ้อม)
+CAMERA_LOG_ENABLED = True       # ปิดง่าย ๆ ตรงนี้ถ้ากล้องมีปัญหาแล้วอยากตัดทิ้งไปก่อน
+CAMERA_SAVE_PHOTOS = True       # เซฟไฟล์ .jpg ทุกครั้งที่ log ไหม (ปิดได้ถ้าดิสก์เต็ม)
+CAMERA_WHITE_SAT_MAX = 60       # HSV Saturation ต่ำกว่านี้ + Value สูงกว่า VAL_MIN = "ขาว"
+CAMERA_WHITE_VAL_MIN = 180
+CAMERA_ROI_FRAC = 0.5           # ครอปเฉพาะสี่เหลี่ยมกึ่งกลางเฟรม (เศษส่วนของทั้งภาพ)
+                                 # กันขอบเฟรม/แชสซีตัวเองก่อกวนค่า % ขาว
 
 # ---------- ความเร็ว ----------
-BASE_SPEED = 0.18               # m/s เดินหน้าปกติ
-SLOW_SPEED = 0.09               # m/s ตอนเข้าใกล้กำแพงหน้า
-GUARD_SPEED = 0.07              # m/s ตอน IR guard ติด
-BACKUP_SPEED = 0.12             # m/s ตอนถอยกลับเข้าช่องเดิม
-ALIGN_SPEED = 0.08              # m/s ตอนจัดระยะกับกำแพงหน้า
-TURN_MAX_DPS = 55.0             # deg/s ความเร็วหมุนสูงสุด
-TURN_MIN_DPS = 14.0             # deg/s กำลังขับขั้นต่ำเพื่อชนะแรงเสียดทานพื้น
+# เดินหน้าเข้าช่องใหม่: drive_speed คงที่ค่าเดียว ไม่มี P-control ปรับทิศ/ตำแหน่งใด ๆ
+# ระหว่างทางทั้งสิ้น (ตกลงกับผู้ใช้แล้ว - ห้ามมีข้อยกเว้น) ปรับได้แค่ตอนจอดนิ่งเท่านั้น
+HOP_SPEED = 0.18                 # m/s เดินหน้าเข้าช่องใหม่
+BACKUP_SPEED = 0.12              # m/s ถอยกลับเข้าช่องเดิมหลังเดินไม่ผ่าน (คงที่เช่นกัน)
 
-# ---------- ตัวคุม (controller) ----------
-# หมายเหตุ: drive_speed ปัดค่าก่อนส่งเสมอ (util.py val2proto) โดย x/y เหลือทศนิยม
-# 2 ตำแหน่ง และ z ถูกปัดเป็นจำนวนเต็ม ดังนั้นคำสั่งที่เล็กกว่า 0.01 m/s หรือ
-# 1 deg/s จะกลายเป็นศูนย์ การจูนเกนให้ผลลัพธ์ต่ำกว่าขั้นนี้จึงไม่มีผลอะไรเลย
-KP_TURN = 1.5                   # deg/s ต่อ 1 องศา error ตอนหมุนอยู่กับที่
-TURN_TOLERANCE_DEG = 1.5
-TURN_TIMEOUT_S = 5.0
-KP_YAW_HOLD = 0.9               # deg/s ต่อ 1 องศา error ตอนเดินหน้า
-MAX_YAW_CORRECT_DPS = 16.0
-YAW_HOLD_DEADBAND_DEG = 1.2
-KP_CENTER = 0.0006              # m/s ต่อ 1 หน่วย ADC error (ไม่แปลงเป็น cm)
-CENTER_DEADBAND_ADC = 15        # error ต่ำกว่านี้ถือว่ากลางช่องแล้ว
-MAX_STRAFE = 0.08               # m/s strafe สูงสุด
-ALIGN_TOLERANCE_MM = 18
+# ---------- chassis.move() : ใช้กับการเลี้ยวและการจัดกึ่งกลางตอนจอดเท่านั้น ----------
+MOVE_XY_SPEED = 0.5              # m/s - ค่าต่ำสุดที่ chassis.move() ยอมรับจริง (checker บังคับ [0.5, 2.0])
+MOVE_Z_SPEED = 45.0              # deg/s ตอนหมุน
+MOVE_TIMEOUT_MARGIN_S = 3.0      # กัน wait_for_completed() ค้างตลอดกาล
+
+# ---------- การจัดกึ่งกลางช่อง (chassis.move() ทีละก้อน อ่าน-ตัดสินใจ-ขยับ-อ่านใหม่) ----------
+ALIGN_TOLERANCE_MM = 15          # front-back (ToF)
+LATERAL_TOLERANCE_ADC = 15       # ซ้าย-ขวา (Sharp ADC ดิบ ไม่แปลงเป็น mm)
+LATERAL_MAX_ITERS = 6
+MAX_CREEP_STEP_MM = 40           # ก้าวเดียวตอนจัดกึ่งกลางห้ามเกินนี้
+MIN_SAFE_MM = 60                 # ห้ามสั่งก้าวใดที่ทำให้ระยะเหลือน้อยกว่านี้เด็ดขาด
+MAX_CREEP_TOTAL_MM = 200         # เพดานระยะสะสม front-back ต่อการจัดกึ่งกลาง 1 ครั้ง
+MAX_TOTAL_LATERAL_MM = 200       # เพดานระยะสะสมซ้าย-ขวา (กันอ้างอิง Sharp ข้างเดียวคลาดเคลื่อน
+                                 # แล้วไล่ขยับไม่มีที่สิ้นสุดจนหลุดเส้นทาง)
 
 # ---------- การนับช่อง ----------
 CELL_COMPLETE_RATIO = 0.85      # เดินได้ >= 85% ของช่อง = ถือว่าเข้าช่องใหม่แล้ว
-TOF_STOP_MIN_RATIO = 0.50       # ถ้าจบเพราะ ToF ต้องเดินมาแล้วอย่างน้อย 50%
-MOVE_TIMEOUT_RATIO = 2.0        # timeout = (CELL_SIZE_M / BASE_SPEED) * ค่านี้
+MOVE_TIMEOUT_RATIO = 2.0        # timeout = (CELL_SIZE_M / HOP_SPEED) * ค่านี้
 
 # ---------- ระบบ ----------
-CONTROL_DT = 0.04               # คาบของ control loop
+CONTROL_DT = 0.04               # คาบของลูปตรวจระหว่างเดินหน้า (โพลว่าจะ e-stop ไหม)
 SETTLE_S = 0.25                 # เวลารอให้หุ่นนิ่งก่อนอ่านค่าลงแผนที่
 MAX_STEPS = 350                 # สำรวจครบ 20 ช่องพร้อม backtrack ใช้ก้าวมากกว่าเดินไปเป้าหมายเดียว
 BACK_RETRY = 4                  # เดิน backtrack/reroute ไม่ผ่านกี่ครั้งติดกัน ก่อนปิดทางนั้นไว้ก่อน
 DDS_FREQ = 20                   # Hz รองรับเฉพาะ 1, 5, 10, 20, 50
 ADAPTER_WAIT_S = 2.0            # รอ sub_adapter นานแค่ไหนก่อนสลับไป fallback
 SENSOR_STALE_S = 0.5            # ไม่มีข้อมูลใหม่เกินนี้ = ถือว่าค่าใช้ไม่ได้
-DRIVE_WATCHDOG_S = 0.5          # หุ่นหยุดเองถ้าเราไม่ส่งคำสั่งใหม่ภายในเวลานี้
-YAW_SIGN_TEST_DPS = 40.0        # ความเร็วหมุนตอนหาเครื่องหมายของ yaw
-YAW_SIGN_TEST_S = 0.45          # นานแค่ไหน (~18 องศา)
+DRIVE_WATCHDOG_S = 0.5          # หุ่นหยุดเองถ้าเราไม่ส่งคำสั่งใหม่ภายในเวลานี้ (drive_speed เท่านั้น)
 CONN_TYPE = "ap"                # ap / sta / rndis
 LOG_PREFIX = "slam8"            # ชื่อไฟล์ผลลัพธ์ (map/steps/trajectory/summary) ขึ้นต้นด้วยคำนี้
+#: str: โฟลเดอร์ที่ไฟล์นี้อยู่ - ไฟล์ผลลัพธ์ทุกชนิด (log/CSV/map/state/รูปกล้อง)
+#: บันทึกไว้ที่นี่เสมอ ไม่ว่าจะสั่งรัน ``python SLAM.py`` จาก cwd ไหนก็ตาม
+#: (ก่อนหน้านี้ path เป็นแบบสัมพัทธ์ล้วน ๆ ถ้ารันจากโฟลเดอร์อื่นไฟล์ผลลัพธ์จะ
+#: ไปกระจัดกระจายอยู่ที่อื่น หาไม่เจอ)
+LOG_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _log_path(name):
+    """str: ต่อชื่อไฟล์เข้ากับ ``LOG_DIR`` เสมอ"""
+    return os.path.join(LOG_DIR, name)
 
 
 # =====================================================================
@@ -174,52 +254,38 @@ def clamp(value, low, high):
     return max(low, min(high, value))
 
 
-def front_wall_threshold_mm():
-    """เกณฑ์ ToF ที่ใช้ตัดสินว่ามีกำแพงอยู่ด้านหน้า หน่วย mm
+def wall_cutoff_mm(base_mm):
+    """int: เกณฑ์ ToF ที่ใช้ตัดสินว่ามีกำแพงอยู่ในทิศนั้น หน่วย mm
 
-    เรขาคณิต: เมื่อหุ่นจอดกลางช่อง กำแพงที่ขอบช่องนี้อ่านได้ ``FRONT_STOP_MM``
-    ส่วนกำแพงที่ขอบช่องถัดไปอ่านได้ ``FRONT_STOP_MM + CELL_SIZE`` เส้นแบ่งจึงวางไว้
+    เรขาคณิต: เมื่อหุ่นจอดกลางช่อง กำแพงที่ขอบช่องนี้อ่านได้ ``base_mm``
+    ส่วนกำแพงที่ขอบช่องถัดไปอ่านได้ ``base_mm + CELL_SIZE`` เส้นแบ่งจึงวางไว้
     ตรงกลางระหว่างสองค่านั้นพอดี เพราะเป็นจุดที่ทนต่อการจอดคลาดเคลื่อนได้มากที่สุด
+    ใช้ร่วมกันทั้งหน้า-หลัง (``base_mm=FRONT_STOP_MM``) และซ้าย-ขวา
+    (``base_mm=SIDE_STOP_MM``) เพราะเป็นเรขาคณิตเดียวกัน
     """
     if FRONT_WALL_MM_OVERRIDE is not None:
         return FRONT_WALL_MM_OVERRIDE
-    return FRONT_STOP_MM + int(CELL_SIZE_M * 1000.0 / 2.0)
+    return base_mm + int(CELL_SIZE_M * 1000.0 / 2.0)
 
 
-def sharp_polarity():
-    """+1 ถ้า ADC สูง = อยู่ใกล้, -1 ถ้า ADC ต่ำ = อยู่ใกล้
+def tof_is_wall(mm, base_mm):
+    """bool: ตีความค่า ToF (ที่ผ่าน ``SensorHub`` แปลง blind-zone มาแล้ว) ว่ามีกำแพงไหม
 
-    อนุมานจากลำดับของ (enter, exit) ที่ ``--calib`` คำนวณมาให้ จึงไม่ต้องมี
-    ค่าคอนฟิกแยกอีกตัว และไม่ต้องสมมติว่าเซนเซอร์ตอบสนองไปทางไหน
+    ``mm`` เป็น None แปลว่าไม่มีอะไรอยู่ในระยะที่วัดได้ = โล่ง ไม่ใช่กำแพง
     """
-    enter, exit_ = SHARP_LEFT_WALL_ADC
-    return 1 if enter > exit_ else -1
+    if mm is None:
+        return False
+    return mm < wall_cutoff_mm(base_mm)
 
 
-def wall_from_adc(adc, thresholds):
-    """แปลงค่า ADC ดิบเป็นสถานะกำแพง
+def sharp_closeness(adc, closer_is_higher):
+    """int: แปลงค่า ADC ดิบให้เป็นสเกล "ยิ่งมากยิ่งใกล้กำแพง" เสมอ ไม่ว่าเซนเซอร์
 
-    Args:
-        adc (int): ค่า ADC ดิบ
-        thresholds (tuple): (enter, exit) จาก ``--calib``
-
-    Returns:
-        bool or None: True=มีกำแพง, False=ไม่มี, None=ก้ำกึ่งตัดสินไม่ได้
+    ตัวนั้นจะตอบสนองไปทางไหนจริง ๆ (อนุมานจาก ``closer_is_higher`` ที่วัดมาจาก
+    ``--calib``) ทำให้สูตรคำนวณ error ทางฝั่งซ้ายและขวาเขียนเป็นสูตรเดียวกันได้
+    โดยไม่ต้องแยกเคสตามขั้วของเซนเซอร์อีก
     """
-    if adc is None:
-        return None
-    enter, exit_ = thresholds
-    if enter > exit_:
-        if adc >= enter:
-            return True
-        if adc <= exit_:
-            return False
-    else:
-        if adc <= enter:
-            return True
-        if adc >= exit_:
-            return False
-    return None
+    return adc if closer_is_higher else -adc
 
 
 def ir_triggered(io_value):
@@ -232,9 +298,10 @@ def ir_triggered(io_value):
 def require_calibration():
     """ตรวจว่าค่าจาก --calib ครบแล้ว ถ้าไม่ครบให้หยุดพร้อมบอกว่าขาดตัวไหน"""
     missing = [name for name in (
-        "SHARP_LEFT_WALL_ADC", "SHARP_RIGHT_WALL_ADC",
+        "FRONT_STOP_MM", "SIDE_STOP_MM",
         "SHARP_LEFT_REF", "SHARP_RIGHT_REF",
-        "IR_TRIGGERED_VALUE", "FRONT_STOP_MM",
+        "SHARP_LEFT_CLOSER_IS_HIGHER", "SHARP_RIGHT_CLOSER_IS_HIGHER",
+        "IR_TRIGGERED_VALUE",
     ) if globals()[name] is None]
     if not missing:
         return
@@ -260,47 +327,68 @@ class SensorSnapshot(object):
     """
 
     __slots__ = ("t", "tof_mm", "adc_left", "adc_right", "ir_left", "ir_right",
-                 "yaw", "pos_x", "pos_y", "fresh", "stale_reason")
+                 "yaw", "pos_x", "pos_y", "impact", "slip", "roll_over",
+                 "fresh", "stale_reason")
 
     def __init__(self, t, tof_mm, adc_left, adc_right, ir_left, ir_right,
-                 yaw, pos_x, pos_y, fresh, stale_reason):
+                 yaw, pos_x, pos_y, impact, slip, roll_over,
+                 fresh, stale_reason):
         #: float: เวลาที่ถ่ายภาพนิ่งชุดนี้
         self.t = t
-        #: int or None: ระยะด้านหน้า mm, None = ไม่มีอะไรอยู่ในระยะที่วัดได้
+        #: int or None: ระยะ ToF ปัจจุบัน (ทิศที่ gimbal ชี้อยู่ตอนนี้) mm
+        #: ผ่านการแปลง blind-zone แล้ว (ดู ``SensorHub._interpret_tof``)
+        #: None = ไม่มีอะไรอยู่ในระยะที่วัดได้ (โล่ง) ไม่ใช่ "สตรีมพัง"
         self.tof_mm = tof_mm
-        #: int or None: ค่า ADC ดิบของ Sharp ซ้าย
+        #: int or None: ค่า ADC ดิบของ Sharp ซ้าย (ใช้จัดกึ่งกลางตอนจอดเท่านั้น)
         self.adc_left = adc_left
-        #: int or None: ค่า ADC ดิบของ Sharp ขวา
+        #: int or None: ค่า ADC ดิบของ Sharp ขวา (ใช้จัดกึ่งกลางตอนจอดเท่านั้น)
         self.adc_right = adc_right
-        #: int or None: ค่า IO ดิบของ IR 45 องศาซ้าย
+        #: int or None: ค่า IO ดิบของ IR 45 องศาซ้าย (e-stop ตอนเดินหน้าเท่านั้น)
         self.ir_left = ir_left
-        #: int or None: ค่า IO ดิบของ IR 45 องศาขวา
+        #: int or None: ค่า IO ดิบของ IR 45 องศาขวา (e-stop ตอนเดินหน้าเท่านั้น)
         self.ir_right = ir_right
-        #: float: yaw ดิบจาก IMU หน่วยองศา ช่วง [-180, 180]
+        #: float: yaw ดิบจาก IMU หน่วยองศา ช่วง [-180, 180] (ใช้ log เท่านั้น)
         self.yaw = yaw
         #: float: ตำแหน่งล้อแกน x หน่วยเมตร
         self.pos_x = pos_x
         #: float: ตำแหน่งล้อแกน y หน่วยเมตร
         self.pos_y = pos_y
+        #: bool: เซฟตี้เน็ตอิสระจาก ToF - ชนจริงจากฮาร์ดแวร์ (accelerometer)
+        self.impact = impact
+        #: bool: ล้อลื่น/ติดขัด จาก chassis.sub_status()
+        self.slip = slip
+        #: bool: หุ่นพลิกคว่ำ/เอียงมาก
+        self.roll_over = roll_over
         #: bool: False เมื่อมีสตรีมสำคัญตัวใดตัวหนึ่งขาดการอัปเดต
         self.fresh = fresh
         #: str: ชื่อสตรีมที่ขาดการอัปเดต ว่างเปล่าถ้าปกติ
         self.stale_reason = stale_reason
 
-    def front_wall(self):
-        """bool: มีกำแพงด้านหน้าหรือไม่
+    def is_wall(self, base_mm):
+        """bool: ตีความ ``tof_mm`` ปัจจุบัน (ไม่ว่า gimbal ชี้ทิศไหนอยู่) ว่ามีกำแพงไหม"""
+        return tof_is_wall(self.tof_mm, base_mm)
 
-        ``tof_mm`` เป็น None แปลว่าไม่มีอะไรอยู่ในระยะที่เซนเซอร์วัดได้ ซึ่งใน
-        เขาวงกตคือ "ไม่มีกำแพง" ส่วนกรณีที่สตรีมขาดจริง ๆ จะถูกจับด้วย ``fresh``
-        ที่ระดับบนแทน ไม่ปนกันตรงนี้
+    def emergency_trip(self):
+        """bool: ควร e-stop ทันทีไหม (ใช้เฉพาะระหว่างเดินหน้าเข้าช่องใหม่)
+
+        รวม 3 แหล่ง: IR ทแยง 2 ตัว, impact/roll_over จากฮาร์ดแวร์ (อิสระจาก ToF
+        โดยสิ้นเชิง), และ ToF หน้าที่ใกล้ผิดปกติ (กันชนสุดท้ายระหว่างทาง ไม่ใช่
+        การปรับทิศ/ตำแหน่ง จึงไม่ขัดกับกฎ "ห้ามปรับระหว่างเดินหน้า")
         """
-        if self.tof_mm is None:
-            return False
-        return self.tof_mm < front_wall_threshold_mm()
+        if not self.fresh:
+            return True
+        if self.impact or self.roll_over:
+            return True
+        if IR_ESTOP_ENABLED and (ir_triggered(self.ir_left) or ir_triggered(self.ir_right)):
+            return True
+        if self.tof_mm is not None and self.tof_mm < EMERGENCY_STOP_MM:
+            return True
+        return False
 
 
 class SensorHub(object):
-    """เจ้าของ subscription ทั้งหมด และเป็นทางเดียวที่โค้ดส่วนอื่นอ่านเซนเซอร์
+    """เจ้าของ subscription ทั้งหมด + ตัวคุม gimbal และเป็นทางเดียวที่โค้ดส่วนอื่น
+    อ่านเซนเซอร์
 
     callback ของ DDS ทำงานคนละเธรดกับ control loop ทุกฟิลด์จึงถูกเขียนและอ่าน
     ภายใต้ล็อกเดียวกัน
@@ -313,6 +401,11 @@ class SensorHub(object):
         self._chassis = ep_robot.chassis
         self._sensor = ep_robot.sensor
         self._adaptor = ep_robot.sensor_adaptor
+        self._gimbal = ep_robot.gimbal
+        self._camera = ep_robot.camera
+        #: bool: กล้องเปิดสตรีมสำเร็จไหม (log-only - ถ้าเปิดไม่ได้ก็แค่ข้าม
+        #: ไม่ต้อง fail ทั้งภารกิจ เพราะกล้องไม่มีผลต่อการตัดสินใจใด ๆ)
+        self._camera_ready = False
 
         self._lock = threading.Lock()
         self._tof = [0, 0, 0, 0]
@@ -325,12 +418,37 @@ class SensorHub(object):
         self._pos_x = 0.0
         self._pos_y = 0.0
         self._pos_t = 0.0
+        #: เซฟตี้เน็ตอิสระจาก ToF - chassis.sub_status() ให้บิตชน/ลื่นจริงจาก
+        #: ฮาร์ดแวร์ (accelerometer-derived) ไม่เกี่ยวกับตรรกะ ToF ของเราเลย
+        self._impact = False
+        self._slip = False
+        self._roll_over = False
+        self._status_t = 0.0
 
         #: bool: True = ใช้ sub_adapter (push), False = fallback ไป get_adc (blocking)
         self.use_adapter = True
         self._poll_cache = (None, None)
         self._poll_t = 0.0
         self._started = False
+        #: int: +1 ถ้า moveto(yaw=+X) ทำให้มุมที่วัดจริงเพิ่มขึ้น (ซ้าย), -1 ถ้า
+        #: กลับด้าน หาได้จาก calibrate_gimbal_yaw_sign() เท่านั้น (moveto ใช้
+        #: coordinate mode คนละโหมดกับ move() เครื่องหมาย +/- ไม่รับประกันตรงกัน)
+        self.gimbal_yaw_sign = 1
+
+        # ---------- sensor log ดิบต่อเนื่อง (ทุก snapshot() ที่ถูกเรียกจริง) ----------
+        # เขียนที่จุดเดียวคือ ``snapshot()`` เพราะโค้ดทั้งไฟล์อ่านเซนเซอร์ผ่าน
+        # เมธอดนี้ทางเดียวเท่านั้น (ดู docstring ``SensorSnapshot``) - เพิ่ม log
+        # ตรงนี้จุดเดียวจึงครอบคลุมทุกจังหวะ (สแกน/จัดกึ่งกลาง/เดินหน้า/ถอย/
+        # คาลิเบรต) โดยไม่ต้องแก้โค้ดจุดอ่านเซนเซอร์ทุกจุดทั่วไฟล์
+        self._slog_file = None
+        self._slog_writer = None
+        #: int: หมายเลขก้าว (step) ปัจจุบัน ผู้เรียกระดับบนตั้งค่าไว้เฉย ๆ ให้
+        #: แถว log อ้างอิงได้ว่าอยู่ก้าวไหน (อ่าน/เขียนจากเธรดควบคุมเธรดเดียว
+        #: ไม่ต้องล็อก)
+        self.step = -1
+        #: str: ชื่อจังหวะปัจจุบัน (เช่น "scan_front", "hop", "center_lateral")
+        #: ใช้กำกับแถว log ให้รู้ว่าค่าที่อ่านมาเกิดขึ้นตอนไหนของก้าวนั้น
+        self.phase = "idle"
 
     # ---------- callback (ทำงานบนเธรดของ DDS) ----------
     def _on_tof(self, info):
@@ -358,6 +476,16 @@ class SensorHub(object):
         with self._lock:
             self._pos_x, self._pos_y = info[0], info[1]
             self._pos_t = now
+
+    def _on_status(self, info):
+        # (static_flag, up_hill, down_hill, on_slope, is_pick_up, slip_flag,
+        #  impact_x, impact_y, impact_z, roll_over, hill_static)
+        now = time.time()
+        with self._lock:
+            self._slip = bool(info[5])
+            self._impact = bool(info[6]) or bool(info[7]) or bool(info[8])
+            self._roll_over = bool(info[9])
+            self._status_t = now
 
     # ---------- วงจรชีวิต ----------
     def _check_wiring(self):
@@ -391,15 +519,28 @@ class SensorHub(object):
         self._adaptor.sub_adapter(freq=DDS_FREQ, callback=self._on_adapter)
         self._chassis.sub_attitude(freq=DDS_FREQ, callback=self._on_attitude)
         self._chassis.sub_position(freq=DDS_FREQ, callback=self._on_position)
+        self._chassis.sub_status(freq=DDS_FREQ, callback=self._on_status)
+
+        if CAMERA_LOG_ENABLED and cv2 is not None:
+            try:
+                self._camera.start_video_stream(display=False)
+                self._camera_ready = True
+                print("[CAMERA] เปิดสตรีมกล้องแล้ว (log-only ไม่มีผลต่อการตัดสินใจ)")
+            except Exception as exc:                        # noqa: BLE001
+                print("[WARN] เปิดกล้องไม่สำเร็จ ({0}) - จะข้าม camera log ไปเลย"
+                      .format(exc))
+        elif CAMERA_LOG_ENABLED and cv2 is None:
+            print("[WARN] ไม่มี cv2 ติดตั้ง - ข้าม camera log ไปเลย (pip install opencv-python)")
 
         deadline = time.time() + ADAPTER_WAIT_S
         while time.time() < deadline:
             with self._lock:
-                got_all = self._tof_t > 0 and self._att_t > 0 and self._pos_t > 0
+                got_all = (self._tof_t > 0 and self._att_t > 0
+                           and self._pos_t > 0 and self._status_t > 0)
                 got_adapter = self._adapter_t > 0
             if got_all and (got_adapter or not self.use_adapter):
-                print("[SENSOR] subscription พร้อมใช้งาน (ToF, attitude, position"
-                      "{0})".format(", adapter" if self.use_adapter else ""))
+                print("[SENSOR] subscription พร้อมใช้งาน (ToF, attitude, position, "
+                      "status{0})".format(", adapter" if self.use_adapter else ""))
                 return
             time.sleep(0.05)
 
@@ -412,6 +553,8 @@ class SensorHub(object):
                 missing.append("attitude")
             if self._pos_t == 0:
                 missing.append("position")
+            if self._status_t == 0:
+                missing.append("status")
         if missing:
             raise RuntimeError(
                 "ไม่ได้รับข้อมูลจาก subscription: {0} - ตรวจการเชื่อมต่อหุ่น"
@@ -431,12 +574,116 @@ class SensorHub(object):
         for name, fn in (("distance", self._sensor.unsub_distance),
                          ("adapter", self._adaptor.unsub_adapter),
                          ("attitude", self._chassis.unsub_attitude),
-                         ("position", self._chassis.unsub_position)):
+                         ("position", self._chassis.unsub_position),
+                         ("status", self._chassis.unsub_status)):
             try:
                 fn()
             except Exception as exc:                    # noqa: BLE001
                 print("[WARN] unsub {0} ล้มเหลว: {1}".format(name, exc))
+        if self._camera_ready:
+            try:
+                self._camera.stop_video_stream()
+            except Exception as exc:                    # noqa: BLE001
+                print("[WARN] ปิดสตรีมกล้องล้มเหลว: {0}".format(exc))
+            self._camera_ready = False
         self._started = False
+        self.close_sensor_log()
+
+    # ---------- sensor log ดิบต่อเนื่อง ----------
+    def attach_sensor_log(self, path):
+        """เปิดไฟล์ CSV แล้วเริ่มบันทึกทุก ``snapshot()`` ที่ถูกเรียกจากนี้ไป
+        (real-time, flush ทุกแถว) - เรียกครั้งเดียวหลัง ``start()``
+
+        แถวหนึ่งคือค่าเซนเซอร์ดิบทั้งชุด ณ เวลาหนึ่ง พร้อม ``step``/``phase``
+        ที่ผู้เรียกระดับบนตั้งไว้ (ดู ``set_phase`` / ``self.phase``) ทำให้
+        ย้อนดูได้ว่าตอนเกิดปัญหา (e-stop, ล้อลื่น, ชน) ค่าดิบของ ToF/Sharp/IR/
+        impact ตอนนั้นเป็นเท่าไหร่ ไม่ต้องเดาจาก log สรุปต่อช่องอย่างเดียว
+        """
+        self._slog_file = open(path, "w", newline="", encoding="utf-8")
+        self._slog_writer = csv.writer(self._slog_file)
+        self._slog_writer.writerow([
+            "t", "step", "phase", "tof_mm", "adc_left", "adc_right",
+            "ir_left", "ir_right", "impact", "slip", "roll_over",
+            "pos_x", "pos_y", "yaw", "fresh", "stale_reason"])
+        self._slog_file.flush()
+        print("[SENSORLOG] บันทึกค่าเซนเซอร์ดิบทุกจังหวะไปที่ {0}".format(path))
+
+    def close_sensor_log(self):
+        """ปิดไฟล์ sensor log (เรียกซ้ำได้ ไม่ throw)"""
+        if self._slog_file is not None:
+            try:
+                self._slog_file.close()
+            except Exception:                           # noqa: BLE001
+                pass
+            self._slog_file = None
+            self._slog_writer = None
+
+    def set_phase(self, step, phase):
+        """ตั้งบริบท (step, phase) ที่จะแปะกำกับ ``snapshot()`` ครั้งถัดไปในไฟล์
+        log จนกว่าจะถูกเปลี่ยนอีกที (ผู้เรียกระดับบนอัปเดตก่อนเข้าแต่ละช่วง)
+        """
+        self.step = step
+        self.phase = phase
+
+    def _write_sensor_log(self, snap):
+        if self._slog_writer is None:
+            return
+        self._slog_writer.writerow([
+            round(snap.t, 4), self.step, self.phase, snap.tof_mm,
+            snap.adc_left, snap.adc_right, snap.ir_left, snap.ir_right,
+            int(snap.impact), int(snap.slip), int(snap.roll_over),
+            round(snap.pos_x, 4), round(snap.pos_y, 4), round(snap.yaw, 2),
+            int(snap.fresh), snap.stale_reason])
+        self._slog_file.flush()
+
+    # ---------- กล้อง (log-only) ----------
+    def log_camera_frame(self, tag):
+        """dict: ถ่ายภาพปัจจุบัน 1 เฟรม คำนวณ % พิกเซล "ขาว" ในกรอบกลางเฟรม
+        แล้วเซฟไฟล์ (ถ้า ``CAMERA_SAVE_PHOTOS``) - **ไม่มีผลต่อการตัดสินใจใด ๆ
+        เลย** เก็บไว้ให้คนดูย้อนหลังเท่านั้น (ตกลงกับผู้ใช้แล้ว - ดู
+        ``CAMERA_LOG_ENABLED`` docstring ใน CONFIG)
+
+        Args:
+            tag (str): ชื่อสั้น ๆ บอกบริบท ใช้ตั้งชื่อไฟล์ (เช่น "calib_front_wall",
+                "step012")
+
+        Returns:
+            dict: {"white_pct": float|None, "photo_path": str|None}
+        """
+        result = {"white_pct": None, "photo_path": None}
+        if not self._camera_ready:
+            return result
+        try:
+            img = self._camera.read_cv2_image(timeout=2, strategy="newest")
+        except Exception as exc:                        # noqa: BLE001
+            print("[WARN] อ่านภาพจากกล้องไม่สำเร็จ ({0})".format(tag))
+            print("       {0}".format(exc))
+            return result
+        if img is None:
+            return result
+
+        h, w = img.shape[:2]
+        cx0, cx1 = int(w * (0.5 - CAMERA_ROI_FRAC / 2)), int(w * (0.5 + CAMERA_ROI_FRAC / 2))
+        cy0, cy1 = int(h * (0.5 - CAMERA_ROI_FRAC / 2)), int(h * (0.5 + CAMERA_ROI_FRAC / 2))
+        roi = img[cy0:cy1, cx0:cx1]
+
+        hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+        mask = (hsv[:, :, 1] <= CAMERA_WHITE_SAT_MAX) & (hsv[:, :, 2] >= CAMERA_WHITE_VAL_MIN)
+        white_pct = 100.0 * float(mask.mean())
+        result["white_pct"] = white_pct
+
+        if CAMERA_SAVE_PHOTOS:
+            photo_path = _log_path("{0}_cam_{1}_{2}.jpg".format(LOG_PREFIX, tag, _timestamp()))
+            try:
+                cv2.imwrite(photo_path, img)
+                result["photo_path"] = photo_path
+            except Exception as exc:                    # noqa: BLE001
+                print("[WARN] เซฟรูป {0} ไม่สำเร็จ: {1}".format(photo_path, exc))
+
+        print("[CAMERA] {0}: ขาว {1:.1f}%{2}".format(
+            tag, white_pct,
+            " (เซฟ {0})".format(result["photo_path"]) if result["photo_path"] else ""))
+        return result
 
     # ---------- การอ่าน ----------
     @staticmethod
@@ -468,6 +715,26 @@ class SensorHub(object):
         self._poll_t = now
         return self._poll_cache
 
+    @staticmethod
+    def _interpret_tof(tof_raw):
+        """int or None: แปลงค่า ToF ดิบเป็นค่าที่ใช้ตัดสินใจได้ พร้อมกันบั๊ก blind-zone
+
+        ``tof_raw >= TOF_MAX_VALID_MM`` = ไม่มีอะไรอยู่ในระยะ -> None (โล่ง)
+        ``0 < tof_raw < TOF_BLIND_ZONE_MM`` = ชิดวัตถุมากจนสะท้อนไม่ทัน -> ยังคง
+        เป็นระยะจริงที่วัดได้ (ไม่ใช่ None) เพราะมันคือ "กำแพงชัวร์ อยู่ใกล้มาก"
+        ต่างจากเวอร์ชันแรกที่โยน ``tof_raw == 0`` ทิ้งเป็น None (=โล่ง) ซึ่งผิด
+        (ดู docstring หัวไฟล์ ข้อ 7 - บั๊กที่เจอจาก IR_6/sensors.py)
+        ``tof_raw == 0`` เป๊ะมักเป็นค่าตอนสตรีมยังไม่อัปเดตจริง ๆ (ไม่ใช่ระยะจริง)
+        จึงปัดขึ้นเป็น ``TOF_BLIND_ZONE_MM`` แทนการส่งค่า 0 มม. ตรง ๆ
+        """
+        if tof_raw <= 0:
+            return None if tof_raw == 0 else TOF_BLIND_ZONE_MM
+        if tof_raw >= TOF_MAX_VALID_MM:
+            return None
+        if tof_raw < TOF_BLIND_ZONE_MM:
+            return TOF_BLIND_ZONE_MM
+        return tof_raw
+
     def snapshot(self):
         """SensorSnapshot: อ่านเซนเซอร์ทุกตัวเป็นชุดเดียว"""
         now = time.time()
@@ -476,8 +743,10 @@ class SensorHub(object):
             tof_age = now - self._tof_t if self._tof_t else 1e9
             att_age = now - self._att_t if self._att_t else 1e9
             pos_age = now - self._pos_t if self._pos_t else 1e9
+            status_age = now - self._status_t if self._status_t else 1e9
             yaw = self._yaw
             pos_x, pos_y = self._pos_x, self._pos_y
+            impact, slip, roll_over = self._impact, self._slip, self._roll_over
             if self.use_adapter:
                 ad = list(self._ad)
                 io = list(self._io)
@@ -496,9 +765,7 @@ class SensorHub(object):
             adc_left, adc_right = adc["l"], adc["r"]
             ir_left, ir_right = io_map["l"], io_map["r"]
 
-        # ToF: ค่า 0 หรือค่าเกินพิสัย แปลว่าไม่มีเป้าหมายอยู่ในระยะ ไม่ใช่สตรีมพัง
-        # กรณีสตรีมพังจริงจะถูกจับด้วย tof_age ด้านล่างแทน
-        tof_mm = tof_raw if 0 < tof_raw <= TOF_MAX_VALID_MM else None
+        tof_mm = self._interpret_tof(tof_raw)
 
         stale = ""
         if tof_age > SENSOR_STALE_S:
@@ -507,43 +774,131 @@ class SensorHub(object):
             stale = "attitude"
         elif pos_age > SENSOR_STALE_S:
             stale = "position"
+        elif status_age > SENSOR_STALE_S:
+            stale = "status"
         elif adapter_age > SENSOR_STALE_S:
             stale = "adapter"
 
-        return SensorSnapshot(
+        snap = SensorSnapshot(
             t=now, tof_mm=tof_mm, adc_left=adc_left, adc_right=adc_right,
             ir_left=ir_left, ir_right=ir_right, yaw=yaw,
-            pos_x=pos_x, pos_y=pos_y, fresh=(stale == ""), stale_reason=stale)
+            pos_x=pos_x, pos_y=pos_y, impact=impact, slip=slip,
+            roll_over=roll_over, fresh=(stale == ""), stale_reason=stale)
+        self._write_sensor_log(snap)
+        return snap
 
-    def read_walls_settled(self, samples=WALL_VOTE_SAMPLES):
-        """อ่านกำแพงหน้า/ซ้าย/ขวา ตอนหุ่นจอดนิ่งแล้ว โดยโหวตเสียงข้างมาก
+    def emergency_flags(self):
+        """tuple: (impact, slip, roll_over) จาก ``chassis.sub_status()`` ล่าสุด"""
+        with self._lock:
+            return self._impact, self._slip, self._roll_over
 
-        ค่าที่ก้ำกึ่งจนตัดสินไม่ได้จะนับเป็น "ไม่มีกำแพง" โดยตั้งใจ เพราะสองความ
-        ผิดพลาดนี้ไม่เท่ากัน:
+    # ---------- gimbal ----------
+    def point_gimbal(self, yaw_deg):
+        """หมุน gimbal ไปมุม yaw_deg (สัมพัทธ์กับแชสซี) แล้วรอให้นิ่ง ไม่อ่านค่า
 
-        * เดาว่าไม่มีกำแพงทั้งที่มี - แก้ตัวเองได้ พอหมุนไปทางนั้นแล้ว pre-move
-          check จะเห็นกำแพงด้วย ToF แล้วมาร์กลงแผนที่ให้เอง
-        * เดาว่ามีกำแพงทั้งที่ไม่มี - ปิดทางเดินนั้นถาวรและไม่มีอะไรมาแก้ให้
+        คูณด้วย ``gimbal_yaw_sign`` ก่อนส่งจริงเสมอ ที่อื่นในไฟล์นี้จึงเรียกด้วย
+        ค่า "ตามความหมาย" ได้เลย (0=หน้า, +90=ซ้าย, -90=ขวา, 180=หลัง)
+        """
+        try:
+            action = self._gimbal.moveto(pitch=GIMBAL_PITCH,
+                                          yaw=self.gimbal_yaw_sign * yaw_deg,
+                                          yaw_speed=GIMBAL_YAW_SPEED)
+            ok = action.wait_for_completed(timeout=6.0)
+        except Exception as exc:                        # noqa: BLE001
+            print("[WARN] point_gimbal({0}) ล้มเหลว: {1}".format(yaw_deg, exc))
+            ok = False
+        time.sleep(GIMBAL_SETTLE_S)
+        return ok
+
+    def calibrate_gimbal_yaw_sign(self):
+        """หมุน gimbal ทดสอบด้วย ``moveto()`` จริง แล้ววัดจาก ``sub_angle()`` ว่า
+        +yaw ที่สั่งไปทำให้มุมเพิ่มไปทางไหนจริง ๆ (ต้องวัดเอง เพราะ moveto()
+        กับ move() ของแชสซีใช้ coordinate mode คนละโหมดกัน ไม่รับประกันว่า
+        เครื่องหมาย +/- จะตรงกัน)
+        """
+        readings = {}
+
+        def _on_angle(info):
+            readings["yaw"] = info[1]
+
+        self._gimbal.sub_angle(freq=10, callback=_on_angle)
+        time.sleep(0.3)
+        self._gimbal.moveto(pitch=0, yaw=0, yaw_speed=60).wait_for_completed()
+        time.sleep(0.3)
+        start_yaw = readings.get("yaw")
+
+        test_yaw = 30
+        self._gimbal.moveto(pitch=0, yaw=test_yaw, yaw_speed=60).wait_for_completed()
+        time.sleep(0.3)
+        end_yaw = readings.get("yaw")
+
+        self._gimbal.moveto(pitch=0, yaw=0, yaw_speed=60).wait_for_completed()
+        self._gimbal.unsub_angle()
+
+        if start_yaw is None or end_yaw is None:
+            raise RuntimeError(
+                "ไม่ได้รับข้อมูลจาก gimbal.sub_angle() - ตรวจการเชื่อมต่อหุ่น")
+        delta = end_yaw - start_yaw
+        if abs(delta) < 3.0:
+            raise RuntimeError(
+                "หมุน gimbal ทดสอบแล้วมุมแทบไม่ขยับ ({0:.2f} องศา) - gimbal "
+                "อาจติดขัด หรือ sub_angle ไม่ทำงาน".format(delta))
+        self.gimbal_yaw_sign = 1 if delta > 0 else -1
+        print("[GIMBAL] สั่ง moveto(yaw=+{0}) จริง -> มุมเปลี่ยน {1:+.2f} "
+              "-> GIMBAL_YAW_SIGN = {2:+d}".format(test_yaw, delta, self.gimbal_yaw_sign))
+
+    def read_tof(self, yaw_deg, phase="tof_read"):
+        """หมุน gimbal ไปทิศที่ต้องการ แล้ววัด ToF จาก ``TOF_SAMPLES`` ตัวอย่าง
+        พร้อมกรอง outlier ก่อนสรุปผล
+
+        Args:
+            phase (str): ชื่อจังหวะไว้กำกับ sensor log ของตัวอย่างทั้งหมดที่
+                อ่านรอบนี้ (เช่น "scan_front") ไม่กระทบตรรกะการอ่าน/กรองเลย
 
         Returns:
-            tuple: (front, left, right) เป็น bool ทั้งสามตัว
+            int or None: ระยะ mm ที่กรองแล้ว (ผ่าน blind-zone fix แล้ว) หรือ
+            None ถ้าอ่านไม่ได้/เชื่อถือไม่ได้
         """
-        votes = {"front": [0, 0], "left": [0, 0], "right": [0, 0]}
-        for _ in range(max(1, samples)):
+        self.phase = phase
+        self.point_gimbal(yaw_deg)
+        samples = []
+        for _ in range(TOF_SAMPLES):
             snap = self.snapshot()
-            for key, value in (("front", snap.front_wall()),
-                               ("left", wall_from_adc(snap.adc_left,
-                                                      SHARP_LEFT_WALL_ADC)),
-                               ("right", wall_from_adc(snap.adc_right,
-                                                       SHARP_RIGHT_WALL_ADC))):
-                if value is True:
-                    votes[key][0] += 1
-                elif value is False:
-                    votes[key][1] += 1
-            time.sleep(WALL_VOTE_INTERVAL)
-        return (votes["front"][0] > votes["front"][1],
-                votes["left"][0] > votes["left"][1],
-                votes["right"][0] > votes["right"][1])
+            if snap.tof_mm is not None:
+                samples.append(snap.tof_mm)
+            time.sleep(TOF_SAMPLE_INTERVAL)
+        return self._filter_tof_samples(samples)
+
+    @staticmethod
+    def _filter_tof_samples(samples):
+        """int or None: กรอง outlier ออกก่อนสรุปเป็นค่าเดียว (median)"""
+        if not samples:
+            return None
+        raw_median = statistics.median(samples)
+        filtered = [s for s in samples if abs(s - raw_median) <= TOF_OUTLIER_MM]
+        if len(filtered) < max(1, int(len(samples) * TOF_MIN_VALID_SAMPLES_FRAC)):
+            print("[TOF-FILTER] ตัวอย่าง {0} -> เหลือ {1} หลังกรอง outlier "
+                  "(median ดิบ={2}mm) - น้อยเกินไป ถือว่าอ่านไม่ได้"
+                  .format(samples, len(filtered), raw_median))
+            return None
+        return int(statistics.median(filtered))
+
+    def read_walls_scan(self, heading):
+        """หมุน gimbal ส่อง ToF ทั้ง 4 ทิศสัมบูรณ์ (N/E/S/W) รอบช่องปัจจุบัน แล้ว
+        ชี้หน้ากลับก่อนคืนค่าเสมอ (ต้องชี้หน้าไว้ก่อนเดินหน้าเข้าช่องใหม่เสมอ)
+
+        Returns:
+            dict: {ทิศสัมบูรณ์ 0-3: {"wall": bool, "mm": int|None, "label": str}}
+        """
+        readings = {}
+        for rel, gyaw, label in SCAN_PLAN:
+            mm = self.read_tof(gyaw, phase="scan_" + label)
+            base_mm = FRONT_STOP_MM if rel in (0, 2) else SIDE_STOP_MM
+            wall = tof_is_wall(mm, base_mm)
+            absolute_dir = (heading + rel) % 4
+            readings[absolute_dir] = {"wall": wall, "mm": mm, "label": label}
+        self.point_gimbal(GIMBAL_YAW_FRONT)
+        return readings
 
 
 # =====================================================================
@@ -572,6 +927,12 @@ class Maze(object):
         self.known = [[0] * height for _ in range(width)]
         self.visited = set()
         self.border_openings = set(border_openings or ())
+        #: dict: {frozenset({cell_a, cell_b}): จำนวนครั้งติดที่เจอ "โล่ง" ล่าสุด}
+        #: ใช้กับ edge ที่เคยมาร์กเป็นกำแพงแล้วเท่านั้น (ดู ``set_wall``)
+        self._open_streak = {}
+        #: list: log ของ edge ที่เคยมาร์กว่าเป็นกำแพงแล้วถูกลบออกภายหลัง
+        #: (x, y, direction, streak_ที่ทำให้ลบ) - ไว้ export เป็น "conflicts"
+        self.evicted_walls = []
         self._add_borders()
 
     def _add_borders(self):
@@ -606,23 +967,57 @@ class Maze(object):
     def set_wall(self, x, y, direction, present):
         """บันทึกผลการตรวจกำแพงหนึ่งด้าน พร้อมอัปเดตช่องข้างเคียงให้สอดคล้องกัน
 
-        เมื่อ present เป็น True จะติดบิตกำแพง แต่เมื่อเป็น False จะไม่ลบบิตที่เคย
-        ติดไว้แล้ว เพราะกำแพงจริงไม่เดินหนีไปไหน การอ่านพลาดครั้งเดียวจึงไม่ควร
-        ลบสิ่งที่เคยยืนยันแล้วออกจากแผนที่ แผนที่จะเพิ่มกำแพงได้อย่างเดียว
-        ซึ่งทำให้ผลของ Flood Fill นิ่งและไม่แกว่งไปมาระหว่างรอบ
+        นโยบายไม่สมมาตร (asymmetric wall evidence - อ้างอิงแนวทางจาก
+        ``nattannsra18/robomaster-autonomous-maze-navigation``): เจอกำแพง 1
+        ครั้งมาร์กทันที (ปลอดภัยไว้ก่อน) แต่ edge ที่เคยมาร์กว่าเป็นกำแพงแล้ว
+        จะถูก "ลบ" ออกได้ก็ต่อเมื่อเจอ "โล่ง" ยืนยันติดกัน
+        ``WALL_OPEN_CONFIRM_STREAK`` ครั้งเท่านั้น (ไม่ใช่ครั้งเดียว) - กัน
+        กำแพงผีค้างถาวรจาก glitch ตอนต้น (กระทบ Map Accuracy โดยตรง) โดยไม่ทำให้
+        แผนที่แกว่งจาก noise ครั้งเดียว เพราะ planner สแกนซ้ำทุก edge ที่ผ่าน
+        ทุกครั้งอยู่แล้ว โอกาสได้ 3 ครั้งติดจากการมาเยือนซ้ำจึงไม่ใช่เรื่องยาก
+        ขอบสนาม (ไม่มี ``nx, ny`` ในสนาม) ไม่มีสิทธิ์ถูกลบ เพราะเป็น ground
+        truth ที่ seed ไว้ตั้งแต่ ``_add_borders`` อยู่แล้ว (ยกเว้นช่องที่อยู่ใน
+        ``border_openings`` ซึ่งไม่ได้ถูก seed เป็นกำแพงตั้งแต่ต้น จึงไม่มีอะไร
+        ให้ลบอยู่แล้วเช่นกัน)
         """
         if not self.in_bounds(x, y):
             return
+        nx, ny = x + DX[direction], y + DY[direction]
+        opposite = (direction + 2) % 4
+        edge_key = frozenset(((x, y), (nx, ny))) if self.in_bounds(nx, ny) else None
+        currently_wall = bool(self.walls[x][y] & (1 << direction))
+
         if present:
             self.walls[x][y] |= (1 << direction)
-        self.known[x][y] |= (1 << direction)
-
-        nx, ny = x + DX[direction], y + DY[direction]
-        if self.in_bounds(nx, ny):
-            opposite = (direction + 2) % 4
-            if present:
+            self.known[x][y] |= (1 << direction)
+            if self.in_bounds(nx, ny):
                 self.walls[nx][ny] |= (1 << opposite)
+                self.known[nx][ny] |= (1 << opposite)
+            if edge_key is not None:
+                self._open_streak.pop(edge_key, None)
+            return
+
+        # present == False: เจอ "โล่ง" ในการอ่านครั้งนี้
+        self.known[x][y] |= (1 << direction)
+        if self.in_bounds(nx, ny):
             self.known[nx][ny] |= (1 << opposite)
+
+        if not currently_wall:
+            return  # ยังไม่เคยมาร์กเป็นกำแพง ไม่มีอะไรให้ลบ
+        if edge_key is None:
+            return  # ขอบสนามจริง ไม่มีสิทธิ์ถูกลบ
+
+        streak = self._open_streak.get(edge_key, 0) + 1
+        if streak >= WALL_OPEN_CONFIRM_STREAK:
+            self.walls[x][y] &= ~(1 << direction)
+            self.walls[nx][ny] &= ~(1 << opposite)
+            self._open_streak.pop(edge_key, None)
+            self.evicted_walls.append((x, y, direction, streak))
+            print("[MAP-EVICT] ({0},{1}) ทิศ {2}: เคยมาร์กเป็นกำแพง แต่เจอโล่ง "
+                  "ยืนยันติดกัน {3} ครั้งแล้ว - ลบออกจากแผนที่"
+                  .format(x, y, DIR_NAMES[direction], streak))
+        else:
+            self._open_streak[edge_key] = streak
 
     def observe(self, x, y, heading, front, left, right):
         """บันทึกผลการตรวจกำแพงจากท่ายืนปัจจุบันลงแผนที่
@@ -728,6 +1123,44 @@ class Maze(object):
             total += 1
             seen += 1 if self.is_known(0, y, WEST) else 0
         return seen, total
+
+    # ---------- บันทึก/โหลดสถานะ (ให้เอาแผนที่ที่สำรวจแล้วมาใช้ต่อได้ในโหมด
+    # goto/return-start โดยไม่ต้องสำรวจใหม่) ----------
+    def to_state(self):
+        """dict: แปลงแผนที่ทั้งหมดเป็นข้อมูลที่ json.dump ได้ตรง ๆ
+
+        เก็บเฉพาะสิ่งที่จำเป็นต่อการวางแผนเส้นทางใหม่ (``walls``/``known``/
+        ``visited``) ไม่เก็บ ``_open_streak`` (แค่ตัวนับระหว่างสำรวจ หมดอายุ
+        ประโยชน์ทันทีที่สำรวจเสร็จ) แต่เก็บ ``evicted_walls`` ไว้เป็นบันทึกประวัติ
+        """
+        return {
+            "width": self.width,
+            "height": self.height,
+            "walls": self.walls,
+            "known": self.known,
+            "visited": sorted(list(self.visited)),
+            "border_openings": sorted(list(self.border_openings)),
+            "evicted_walls": self.evicted_walls,
+        }
+
+    @classmethod
+    def from_state(cls, state):
+        """Maze: สร้างกลับจาก ``to_state()`` (ใช้ตอนโหลดแผนที่เก่ามาวางแผนต่อ)
+
+        สร้างโดยไม่ผ่าน ``_add_borders`` ปกติ (ที่ ``__init__`` เรียกอัตโนมัติ)
+        เพราะ state ที่บันทึกไว้มีข้อมูลกำแพงขอบสนามอยู่แล้วครบถ้วน ถ้าเรียกซ้ำ
+        จะไม่ผิดอะไร (ผลลัพธ์เหมือนเดิม) แต่เขียนให้ตรงไปตรงมากว่าคือ set ค่าตรง ๆ
+        """
+        maze = cls.__new__(cls)
+        maze.width = state["width"]
+        maze.height = state["height"]
+        maze.walls = state["walls"]
+        maze.known = state["known"]
+        maze.visited = set(tuple(c) for c in state["visited"])
+        maze.border_openings = set(tuple(c) for c in state["border_openings"])
+        maze._open_streak = {}
+        maze.evicted_walls = [tuple(row) for row in state.get("evicted_walls", [])]
+        return maze
 
     def _edge_glyph(self, x, y, direction, horizontal):
         """str: สัญลักษณ์ของขอบหนึ่งด้าน แยกกำแพง / โล่งที่ยืนยันแล้ว / ยังไม่เคยดู"""
@@ -909,197 +1342,279 @@ class Driver(object):
     def __init__(self, chassis, hub):
         self.chassis = chassis
         self.hub = hub
-        #: int: +1 ถ้า yaw เพิ่มขึ้นเมื่อหมุนตามเข็ม, -1 ถ้าลดลง หาได้จาก calibrate_yaw_sign
-        self.yaw_sign = 1
-        #: float: ค่า yaw ดิบที่ถือว่าเป็นทิศเหนือของสนาม
-        self.yaw_zero = 0.0
 
     # ---------- พื้นฐาน ----------
     def stop(self):
-        """หยุดล้อทันที"""
-        self.chassis.drive_speed(x=0, y=0, z=0)
+        """สั่งหยุดล้อทันทีด้วย drive_speed(0,0,0) - ใช้ตอนเริ่ม/จบ step"""
+        try:
+            self.chassis.drive_speed(x=0, y=0, z=0, timeout=DRIVE_WATCHDOG_S)
+        except Exception as exc:                        # noqa: BLE001
+            print("[WARN] สั่งหยุดล้อไม่สำเร็จ: {0}".format(exc))
 
     def _drive(self, x=0.0, y=0.0, z=0.0):
         """ส่งคำสั่งขับพร้อม watchdog กันหุ่นวิ่งต่อถ้า control loop ตาย"""
         self.chassis.drive_speed(x=x, y=y, z=z, timeout=DRIVE_WATCHDOG_S)
 
-    def heading_yaw(self, heading):
-        """float: ค่า yaw ดิบที่หุ่นควรอ่านได้เมื่อหันไปทาง heading"""
-        return wrap_deg(self.yaw_zero + self.yaw_sign * heading * 90.0)
+    @staticmethod
+    def _move_timeout(dx_m=0.0, dy_m=0.0, dz_deg=0.0):
+        """float: เวลาที่ให้รอ wait_for_completed() ก่อนถือว่าค้าง"""
+        t_xy = (abs(dx_m) + abs(dy_m)) / MOVE_XY_SPEED if (dx_m or dy_m) else 0.0
+        t_z = abs(dz_deg) / MOVE_Z_SPEED if dz_deg else 0.0
+        return max(t_xy, t_z) * 2.0 + MOVE_TIMEOUT_MARGIN_S
 
-    # ---------- การตั้งศูนย์ ----------
-    def calibrate_yaw_sign(self):
-        """หาว่า yaw จาก IMU เพิ่มหรือลดเมื่อหมุนตามเข็ม แล้วหมุนกลับที่เดิม
+    def bounded_move(self, dx_m=0.0, dy_m=0.0, dz_deg=0.0):
+        """สั่ง ``chassis.move()`` ก้อนเดียว แล้วรอให้เฟิร์มแวร์ยืนยัน
 
-        เรื่องนี้พิสูจน์จาก source ของ SDK ไม่ได้ เพราะเป็นข้อตกลงของฮาร์ดแวร์
-        ถ้าเดาผิดหุ่นจะเลี้ยวกลับทางทุกครั้งโดยไม่มีอะไรเตือน จึงวัดเอาจริง
-        ด้วยการหมุนทดสอบราว 18 องศาแล้วดูว่า yaw เคลื่อนไปทางไหน
+        ใช้เฉพาะตอนเลี้ยวและตอนจัดกึ่งกลาง (ไม่เคยใช้ตอนเดินหน้าเข้าช่องใหม่
+        เพราะ ``chassis.move()`` ยกเลิกกลางทางไม่ได้ - ดู docstring หัวไฟล์)
         """
-        start_yaw = self.hub.snapshot().yaw
-        self._drive(z=YAW_SIGN_TEST_DPS)
-        time.sleep(YAW_SIGN_TEST_S)
-        self.stop()
-        time.sleep(0.5)
+        try:
+            action = self.chassis.move(x=dx_m, y=dy_m, z=dz_deg,
+                                        xy_speed=MOVE_XY_SPEED,
+                                        z_speed=MOVE_Z_SPEED)
+            ok = action.wait_for_completed(
+                timeout=self._move_timeout(dx_m, dy_m, dz_deg))
+        except Exception as exc:                        # noqa: BLE001
+            print("[WARN] chassis.move(x={0:.3f},y={1:.3f},z={2:.1f}) "
+                  "ล้มเหลว: {3}".format(dx_m, dy_m, dz_deg, exc))
+            ok = False
+        return ok
 
-        delta = wrap_deg(self.hub.snapshot().yaw - start_yaw)
-        if abs(delta) < 3.0:
-            raise RuntimeError(
-                "หมุนทดสอบแล้ว yaw แทบไม่ขยับ ({0:.2f} องศา) - ล้ออาจติดขัด "
-                "หรือ sub_attitude ไม่ทำงาน".format(delta))
+    @staticmethod
+    def safe_step_mm(current_mm, desired_delta_mm, min_safe_mm=MIN_SAFE_MM):
+        """float: ตัดขนาดก้าวให้ปลอดภัยเสมอ จากค่า ToF ที่อ่านสด ๆ ณ ตอนนี้"""
+        if current_mm is None:
+            return 0.0
+        room = current_mm - min_safe_mm
+        if room <= 0:
+            return 0.0
+        return max(0.0, min(desired_delta_mm, room))
 
-        self.yaw_sign = 1 if delta > 0 else -1
-        print("[IMU] หมุนตามเข็ม {0:.1f} องศาแล้ว yaw เปลี่ยน {1:+.2f} "
-              "-> YAW_SIGN = {2:+d}"
-              .format(YAW_SIGN_TEST_DPS * YAW_SIGN_TEST_S, delta, self.yaw_sign))
-
-        self._rotate_to_abs(start_yaw)
-        time.sleep(0.2)
-
-    def set_north_reference(self, start_heading):
-        """ตั้งว่า ณ ตอนนี้หุ่นหันไปทาง start_heading แล้วคำนวณ yaw ของทิศเหนือไว้"""
-        current = self.hub.snapshot().yaw
-        self.yaw_zero = wrap_deg(current - self.yaw_sign * start_heading * 90.0)
-        print("[IMU] ตั้งศูนย์แล้ว: yaw ปัจจุบัน {0:.2f} = ทิศ {1}, "
-              "ทิศเหนือ = yaw {2:.2f}"
-              .format(current, DIR_NAMES[start_heading], self.yaw_zero))
-
-    # ---------- การหมุน ----------
-    def _rotate_to_abs(self, target_yaw, tolerance=TURN_TOLERANCE_DEG):
-        """หมุนแบบปิดลูปจนกว่า yaw ดิบจะเท่ากับ target_yaw
-
-        Returns:
-            bool: True ถ้าเข้าเป้าภายในเวลาที่กำหนด
-        """
-        deadline = time.time() + TURN_TIMEOUT_S
-        while time.time() < deadline:
-            error = wrap_deg(target_yaw - self.hub.snapshot().yaw)
-            if abs(error) <= tolerance:
-                self.stop()
-                time.sleep(0.15)
-                return True
-            speed = clamp(KP_TURN * error, -TURN_MAX_DPS, TURN_MAX_DPS)
-            if abs(speed) < TURN_MIN_DPS:
-                speed = TURN_MIN_DPS if error > 0 else -TURN_MIN_DPS
-            self._drive(z=self.yaw_sign * speed)
-            time.sleep(0.03)
-
-        self.stop()
-        time.sleep(0.15)
-        final = wrap_deg(target_yaw - self.hub.snapshot().yaw)
-        print("[WARN] หมุนไม่เข้าเป้าใน {0} วินาที เหลือ error {1:.2f} องศา"
-              .format(TURN_TIMEOUT_S, final))
-        return False
-
+    # ---------- การหมุน (chassis.move(z=) ก้อนเดียว) ----------
     def turn_to(self, current_heading, target_heading):
-        """หมุนจากทิศหนึ่งไปอีกทิศหนึ่ง
-
-        การกลับหลังหัน 180 องศาจะถูกแยกเป็นสองครั้ง ครั้งละ 90 องศา เพราะที่
-        error พอดี 180 องศานั้นทิศทางที่ใกล้ที่สุดมีสองทางเท่ากัน ตัวคุมจะลังเล
-        และอาจสั่นไปมา การบังคับผ่านจุดกึ่งกลางทำให้ทิศทางชัดเจนเสมอ
+        """หมุนจาก grid heading หนึ่งไปอีกอัน เลือกทิศที่หมุนน้อยสุด สั่งครั้งเดียว
+        (180 องศาก็สั่งทีเดียวได้ เพราะ ``chassis.move()`` ปิดลูปเอง ไม่ต้องกลัว
+        ความลังเลแบบตัวคุม P เดิม) แล้วชี้ gimbal กลับหน้าเสมอ (ไม่ตามแชสซี
+        อัตโนมัติใน FREE mode)
 
         Returns:
             int: ทิศที่หุ่นหันอยู่จริงหลังหมุนเสร็จ
         """
-        delta = (target_heading - current_heading) % 4
-        if delta == 0:
+        delta_cells = (target_heading - current_heading) % 4
+        if delta_cells == 0:
+            self.hub.point_gimbal(GIMBAL_YAW_FRONT)
             return current_heading
 
-        self.stop()
-        time.sleep(0.2)
-
-        # ถ้ามีกำแพงอยู่ข้างหน้า จัดระยะให้เข้ากลางช่องก่อน แล้วค่อยหมุน
-        # เพื่อไม่ให้จุดหมุนของหุ่นเบียดกำแพง และให้เริ่มเดินช่องถัดไปจากกลางช่องพอดี
-        snap = self.hub.snapshot()
-        if snap.front_wall():
-            self.align_front()
-
-        if delta == 2:
-            intermediate = (current_heading + 1) % 4
-            print("[TURN] {0} -> {1} (แยกเป็น 2 ครั้งผ่าน {2})"
-                  .format(DIR_NAMES[current_heading], DIR_NAMES[target_heading],
-                          DIR_NAMES[intermediate]))
-            self._rotate_to_abs(self.heading_yaw(intermediate))
-            self._rotate_to_abs(self.heading_yaw(target_heading))
+        # +90=ซ้าย(delta_cells=3), -90=ขวา(delta_cells=1), 180=ทางไหนก็ได้
+        if delta_cells == 1:
+            delta_deg = -90.0
+        elif delta_cells == 3:
+            delta_deg = 90.0
         else:
-            print("[TURN] {0} -> {1}".format(DIR_NAMES[current_heading],
-                                             DIR_NAMES[target_heading]))
-            self._rotate_to_abs(self.heading_yaw(target_heading))
+            delta_deg = 180.0
 
+        print("[TURN] {0} -> {1}".format(DIR_NAMES[current_heading],
+                                         DIR_NAMES[target_heading]))
+        self.bounded_move(dz_deg=delta_deg)
+        self.hub.point_gimbal(GIMBAL_YAW_FRONT)
         return target_heading
 
-    def align_front(self):
-        """ขยับหน้า/หลังจนระยะถึงกำแพงหน้าเท่ากับ FRONT_STOP_MM
+    # ---------- การจัดกึ่งกลางช่อง (chassis.move() ทีละก้อน) ----------
+    def _creep_front_back(self, target_mm, tol_mm, max_iters, max_total_mm):
+        """ไล่ปรับระยะหน้า-หลังด้วย ToF (gimbal ต้องชี้หน้าอยู่แล้วก่อนเรียก)"""
+        self.hub.phase = "center_front_back"
 
-        ใช้ตอนก่อนหมุน เพื่อรีเซ็ตความคลาดเคลื่อนของ odometry ตามแนวเดินทิ้ง
-        กำแพงหน้าเป็นจุดอ้างอิงสัมบูรณ์ที่แม่นกว่าการนับระยะจากล้อสะสม
+        def _read():
+            return self.hub.snapshot().tof_mm
+
+        final_mm = _read()
+        start_pos = self.hub.snapshot()
+        for _ in range(max_iters):
+            if final_mm is None:
+                break
+            error = final_mm - target_mm
+            if abs(error) <= tol_mm:
+                break
+            now_pos = self.hub.snapshot()
+            moved_mm = 1000.0 * math.hypot(now_pos.pos_x - start_pos.pos_x,
+                                            now_pos.pos_y - start_pos.pos_y)
+            room_mm = max_total_mm - moved_mm
+            if room_mm <= 0:
+                print("[CENTER-X] ขยับสะสมแล้ว {0:.0f}mm ครบเพดาน {1}mm - หยุดไว้ก่อน"
+                      .format(moved_mm, max_total_mm))
+                break
+            desired = min(abs(error), MAX_CREEP_STEP_MM, room_mm)
+            if error > 0:
+                step_mm = self.safe_step_mm(final_mm, desired)
+                if step_mm <= 0:
+                    break
+                delta_m = step_mm / 1000.0
+            else:
+                delta_m = -desired / 1000.0
+            self.bounded_move(dx_m=delta_m)
+            final_mm = _read()
+        return final_mm
+
+    def _sharp_lateral_hold(self, left_wall, right_wall, max_total_mm):
+        """ไล่ปรับระยะซ้าย-ขวาด้วย Sharp (3 กรณี ตาม filter ที่ตกลงกัน)
+
+        1) เห็นกำแพงทั้ง 2 ฝั่ง -> เทียบ closeness ซ้าย=ขวากันเอง (self-reference)
+        2) เห็นข้างเดียว -> ยึด closeness ของฝั่งนั้นเทียบ REF ที่คาลิเบรตไว้
+        3) ไม่เห็นเลย -> ไม่แก้อะไร (พื้นที่โล่ง ไม่มีอะไรให้อ้างอิง)
+
+        คุมบนค่า ADC ดิบ (ผ่าน ``sharp_closeness``) ไม่แปลงเป็น mm ตามเหตุผล
+        เดียวกับเวอร์ชันแรก: จุดที่ต้องการคือ "จุดสมดุล" ซึ่งไม่ขึ้นกับเส้นโค้ง
+        ของเซนเซอร์ การแปลงเป็นระยะทางมีแต่จะเพิ่มโอกาสผิดจากสมการ calibration
+
+        Returns:
+            dict: ค่า ADC สุดท้าย/error/จำนวนรอบ ไว้ log
         """
-        snap = self.hub.snapshot()
-        if snap.tof_mm is None or snap.tof_mm > FRONT_STOP_MM + 150:
-            return
-        if snap.tof_mm < 60:
-            print("[ALIGN] ใกล้กำแพงเกินไป ({0}mm) ไม่จัดระยะ".format(snap.tof_mm))
-            return
-
-        for _ in range(25):
+        self.hub.phase = "center_lateral"
+        result = {"left_adc": None, "right_adc": None, "iters": 0, "final_err": None,
+                  "mode": "none"}
+        if not left_wall and not right_wall:
             snap = self.hub.snapshot()
-            if snap.tof_mm is None:
-                break
-            error = snap.tof_mm - FRONT_STOP_MM
-            if abs(error) < ALIGN_TOLERANCE_MM:
-                break
-            self._drive(x=ALIGN_SPEED if error > 0 else -ALIGN_SPEED)
-            time.sleep(0.06)
-        self.stop()
-        time.sleep(0.1)
+            result["left_adc"], result["right_adc"] = snap.adc_left, snap.adc_right
+            print("[CENTER-Y] ไม่เห็นกำแพงทั้ง 2 ฝั่ง (พื้นที่โล่ง) - ไม่แก้ซ้าย-ขวา")
+            return result
 
-    # ---------- การเดินหน้า ----------
-    def _centering_strafe(self, snap):
-        """m/s: ความเร็ว strafe ที่ต้องใช้เพื่อประคองหุ่นให้อยู่กลางช่อง
+        start_pos = self.hub.snapshot()
+        for i in range(LATERAL_MAX_ITERS):
+            result["iters"] = i + 1
+            snap = self.hub.snapshot()
+            result["left_adc"], result["right_adc"] = snap.adc_left, snap.adc_right
 
-        คุมบนค่า ADC ดิบโดยตรง ไม่แปลงเป็นเซนติเมตร เพราะสิ่งที่ต้องการคือ
-        "จุดที่ซ้ายกับขวาสมดุลกัน" ซึ่งอยู่ที่เดิมเสมอไม่ว่าเส้นโค้งของเซนเซอร์
-        จะเป็นรูปอะไร การแปลงเป็นระยะทางก่อนจึงไม่ได้เพิ่มความแม่นยำ มีแต่จะ
-        เพิ่มโอกาสผิดจากสมการ calibration ที่อาจไม่ตรงกับเซนเซอร์ตัวจริง
+            now_pos = self.hub.snapshot()
+            moved_mm = 1000.0 * math.hypot(now_pos.pos_x - start_pos.pos_x,
+                                            now_pos.pos_y - start_pos.pos_y)
+            if moved_mm >= max_total_mm:
+                print("[CENTER-Y] ขยับสะสมแล้ว {0:.0f}mm ครบเพดาน {1}mm - หยุดไว้ก่อน"
+                      .format(moved_mm, max_total_mm))
+                break
+
+            if left_wall and right_wall:
+                result["mode"] = "both"
+                cl = sharp_closeness(snap.adc_left, SHARP_LEFT_CLOSER_IS_HIGHER)
+                cr = sharp_closeness(snap.adc_right, SHARP_RIGHT_CLOSER_IS_HIGHER)
+                error = cl - cr  # บวก = ใกล้ซ้ายเกิน -> ต้องขยับขวา (+y)
+            elif left_wall:
+                result["mode"] = "left_only"
+                cl = sharp_closeness(snap.adc_left, SHARP_LEFT_CLOSER_IS_HIGHER)
+                cl_ref = sharp_closeness(SHARP_LEFT_REF, SHARP_LEFT_CLOSER_IS_HIGHER)
+                error = cl - cl_ref
+            else:
+                result["mode"] = "right_only"
+                cr = sharp_closeness(snap.adc_right, SHARP_RIGHT_CLOSER_IS_HIGHER)
+                cr_ref = sharp_closeness(SHARP_RIGHT_REF, SHARP_RIGHT_CLOSER_IS_HIGHER)
+                error = cr_ref - cr  # บวก = ใกล้ขวาเกิน -> ต้องขยับขวา (+y) เช่นกัน
+
+            result["final_err"] = error
+            if abs(error) <= LATERAL_TOLERANCE_ADC:
+                print("[CENTER-Y] นิ่งแล้ว ({0}) err={1}".format(result["mode"], error))
+                break
+
+            print("[CENTER-Y] รอบ {0}/{1} ({2}) L={3} R={4} err={5}"
+                  .format(i + 1, LATERAL_MAX_ITERS, result["mode"],
+                          snap.adc_left, snap.adc_right, error))
+            step_mm = min(MAX_CREEP_STEP_MM, max_total_mm - moved_mm)
+            if step_mm <= 0:
+                break
+            delta_m = (step_mm / 1000.0) * (1.0 if error > 0 else -1.0)
+            self.bounded_move(dy_m=delta_m)
+
+        return result
+
+    def recenter_lateral(self, walls, heading):
+        """จัดกึ่งกลางซ้าย-ขวาด้วย Sharp อีกครั้ง เฉพาะหลังเลี้ยวเสร็จ (ก่อนเดินหน้า)
+
+        ``center_in_cell`` จัดกึ่งกลางไปแล้วครั้งหนึ่งตอนยังหัน heading เดิม
+        (ก่อนตัดสินใจ/ก่อนเลี้ยว) แต่ ``move_accuracy_test.py`` พบว่าการหมุนของ
+        ``chassis.move(z=)`` มักเหลือดริฟท์ด้านข้างเล็กน้อยหลังหมุนเสร็จ (ดู
+        docstring ``_wait_until_still`` ในไฟล์นั้น) ซึ่งเกิด "หลัง" จุดที่เคย
+        จัดกึ่งกลางไปแล้ว จึงไม่ถูกแก้ ต้องเรียกซ้ำอีกรอบโดยคำนวณ left/right
+        ใหม่จาก ``heading`` ปัจจุบัน (หลังเลี้ยวแล้ว ไม่ใช่ heading ตอนสแกน)
+        ยังคงเป็นการจัดกึ่งกลางตอนจอดนิ่งเหมือนเดิมทุกประการ (หุ่นหมุนเสร็จ
+        แล้ว ยังไม่เริ่มเดินหน้า) จึงไม่ขัดกฎ "ห้ามปรับระหว่างเดินหน้า"
+
+        Args:
+            walls (dict): ผลจาก ``hub.read_walls_scan()`` ของช่องนี้ (index
+                ด้วยทิศสัมบูรณ์ ไม่เปลี่ยนตามการหมุน จึงใช้ค่าเดิมได้เลย)
+            heading (int): ทิศที่หุ่นหันอยู่ตอนนี้ (หลังเลี้ยวแล้ว)
+
+        Returns:
+            dict: ผลลัพธ์จาก ``_sharp_lateral_hold`` ไว้ log
         """
-        polarity = sharp_polarity()
-        left = wall_from_adc(snap.adc_left, SHARP_LEFT_WALL_ADC)
-        right = wall_from_adc(snap.adc_right, SHARP_RIGHT_WALL_ADC)
+        left_wall = walls[(heading + 3) % 4]["wall"]
+        right_wall = walls[(heading + 1) % 4]["wall"]
+        return self._sharp_lateral_hold(left_wall, right_wall, MAX_TOTAL_LATERAL_MM)
 
-        if left and right:
-            # มีกำแพงสองข้าง: คุมให้ผลต่างซ้าย-ขวาเท่ากับตอนอยู่กลางช่องพอดี
-            balance = SHARP_LEFT_REF - SHARP_RIGHT_REF
-            error = (snap.adc_left - snap.adc_right) - balance
-        elif left:
-            # มีกำแพงข้างเดียว: คุมให้ระยะถึงกำแพงนั้นเท่ากับค่าอ้างอิง
-            error = snap.adc_left - SHARP_LEFT_REF
-        elif right:
-            error = SHARP_RIGHT_REF - snap.adc_right
-        else:
-            return 0.0
+    def center_in_cell(self, walls, heading):
+        """จัดกึ่งกลางช่องให้แม่นที่สุดก่อนออกเดิน (ปรับได้แค่ตอนจอดนิ่งเท่านั้น)
 
-        if abs(error) < CENTER_DEADBAND_ADC:
-            return 0.0
-        return clamp(polarity * KP_CENTER * error, -MAX_STRAFE, MAX_STRAFE)
+        front-back ใช้ ToF (สแกนไปแล้วตอน ``read_walls_scan`` gimbal ชี้หน้าอยู่
+        พอดี), ซ้าย-ขวาใช้ Sharp เท่านั้น (ToF ไม่ต้องสแกนซ้ำ)
 
+        Args:
+            walls (dict): ผลจาก ``hub.read_walls_scan(heading)`` ของช่องนี้
+            heading (int): ทิศที่หุ่นหันอยู่ตอนนี้
+
+        Returns:
+            dict: รวมผลลัพธ์จาก front-back + ซ้าย-ขวา ไว้ log
+        """
+        front_mm = self._creep_front_back(FRONT_STOP_MM, ALIGN_TOLERANCE_MM,
+                                           LATERAL_MAX_ITERS, MAX_CREEP_TOTAL_MM)
+        print("[CENTER-X] หน้า={0}mm target={1}mm".format(front_mm, FRONT_STOP_MM))
+
+        left_wall = walls[(heading + 3) % 4]["wall"]
+        right_wall = walls[(heading + 1) % 4]["wall"]
+        lateral = self._sharp_lateral_hold(left_wall, right_wall, MAX_TOTAL_LATERAL_MM)
+
+        return {"front_mm": front_mm, "lateral": lateral}
+
+    # ---------- การเดินหน้า/ถอย: drive_speed คงที่ ไม่มีการปรับใด ๆ ระหว่างทาง ----------
     def advance_one_cell(self, heading):
-        """เดินหน้าหนึ่งช่องตาราง
+        """เดินหน้าหนึ่งช่องตาราง ด้วยความเร็วคงที่ค่าเดียว (``HOP_SPEED``) ไม่มี
+        y หรือ z เลยตลอดการเดิน - ตกลงกับผู้ใช้ชัดเจนว่าห้ามมีการปรับทิศ/ตำแหน่ง
+        ด้วยเซนเซอร์ใด ๆ ระหว่างเดินหน้าเข้าช่องใหม่ทั้งสิ้น เพราะสนามเป็นช่อง
+        สี่เหลี่ยมฉาก ไม่มีความเอียง จอดกึ่งกลาง+หันหัวแม่นตั้งแต่ต้นก็เพียงพอให้
+        เข้าเป้าหมายกึ่งกลางช่องถัดไปได้เองโดยไม่ต้องมีฟีดแบ็กระหว่างทาง
+        (เวอร์ชันก่อนหน้าเคยลองใส่ฟีดแบ็กระหว่างทางแล้วดริฟท์ไม่จบสิ้น - ดู
+        docstring หัวไฟล์)
 
-        จบการเดินได้ 2 แบบที่ถือว่าสำเร็จ คือเดินครบระยะตาม odometry หรือหยุด
-        เพราะ ToF เจอกำแพงที่ระยะกลางช่องพอดี ส่วนกรณีอื่นถือว่าไม่สำเร็จ
+        ใช้ ``drive_speed()`` ไม่ใช่ ``chassis.move()`` เพราะสั่ง 0 แทรกได้จริง
+        และหยุดจริงทันที - เป็นทางเดียวที่ IR/impact/ToF-ฉุกเฉิน จะ "หยุดหุ่น
+        ได้จริง" ระหว่างทาง (จุดเสี่ยงชนที่สุด) ไม่ใช่ best-effort
+
+        วัดระยะที่เดินได้จาก **ระยะที่โปรเจกต์ลงบนแกนหน้า (ทิศ yaw ตอนเริ่มฮ็อป)**
+        ไม่ใช่ระยะตรงเส้นตรง (``hypot``) เหมือนเวอร์ชันก่อนหน้า เพราะพบจากสนาม
+        จริงว่าถ้าหุ่นสไลด์ด้านข้างระหว่างฮ็อป (ล้อ mecanum ไม่สมดุล/พื้นลื่นไม่
+        เท่ากัน แม้จะสั่ง ``x`` อย่างเดียวก็ตาม) ระยะสไลด์นั้นจะไปรวมเข้ากับ
+        ``hypot`` ทำให้แตะเป้าหมาย ``CELL_SIZE_M`` "ครบ" ทั้งที่จริงยังไปข้างหน้า
+        ไม่ถึงกึ่งกลางช่องถัดไป กลายเป็นหยุดเอียงออกข้าง แล้วตอนจอดคิดว่าตัวเอง
+        มาถึงช่องใหม่แล้ว (บั๊กที่ทำให้เห็นหุ่นแกว่งวนไปมาระหว่าง 2 ช่องติดกัน)
+        การโปรเจกต์แบบนี้เป็นแค่การ**วัด**เพื่อตัดสินใจว่าจะหยุดเมื่อไหร่ ไม่ใช่
+        การปรับทิศ/ตำแหน่งระหว่างทาง (ยังไม่มี y/z ส่งออกไปเลยเหมือนเดิม) จึงไม่
+        ขัดกฎ "ห้ามปรับระหว่างเดินหน้า"
 
         Returns:
             tuple: (ok, traveled_m, reason)
         """
         self.stop()
         time.sleep(SETTLE_S)
+        self.hub.phase = "hop"
 
         start = self.hub.snapshot()
         start_x, start_y = start.pos_x, start.pos_y
-        base_target_yaw = self.heading_yaw(heading)
-        timeout = (CELL_SIZE_M / BASE_SPEED) * MOVE_TIMEOUT_RATIO
+        fwd_yaw_rad = math.radians(start.yaw)
+        fwd_dir_x, fwd_dir_y = math.cos(fwd_yaw_rad), math.sin(fwd_yaw_rad)
+
+        def _forward_traveled(snap):
+            return ((snap.pos_x - start_x) * fwd_dir_x
+                     + (snap.pos_y - start_y) * fwd_dir_y)
+
+        timeout = (CELL_SIZE_M / HOP_SPEED) * MOVE_TIMEOUT_RATIO
         deadline = time.time() + timeout
         reason = "timeout"
-        brake_hits = 0
 
         while time.time() < deadline:
             snap = self.hub.snapshot()
@@ -1107,101 +1622,66 @@ class Driver(object):
                 reason = "sensor_stale:" + snap.stale_reason
                 break
 
-            traveled = math.hypot(snap.pos_x - start_x, snap.pos_y - start_y)
+            traveled = _forward_traveled(snap)
             if traveled >= CELL_SIZE_M:
                 reason = "odometry"
                 break
 
-            # เบรกเมื่อ ToF บอกว่าถึงระยะกลางช่องที่ติดกำแพงแล้ว ต้องเห็นติดกัน
-            # สองรอบเพื่อกันค่าแวบเดียว และต้องเดินมาแล้วพอสมควรเพื่อไม่ให้ค่า
-            # ตอนเพิ่งออกตัวจากกำแพงเดิมมาทำให้หยุดทันที
-            if (snap.tof_mm is not None and snap.tof_mm <= FRONT_STOP_MM
-                    and traveled > 0.15):
-                brake_hits += 1
-                if brake_hits >= 2:
-                    reason = "tof_stop"
-                    break
-            else:
-                brake_hits = 0
+            if snap.emergency_trip():
+                if snap.impact or snap.roll_over:
+                    reason = "impact"
+                elif ir_triggered(snap.ir_left) or ir_triggered(snap.ir_right):
+                    reason = "ir_estop"
+                else:
+                    reason = "tof_emergency"
+                break
 
-            speed = BASE_SPEED
-            if snap.tof_mm is not None and snap.tof_mm < FRONT_STOP_MM + 150:
-                speed = SLOW_SPEED
-
-            left_ir = ir_triggered(snap.ir_left)
-            right_ir = ir_triggered(snap.ir_right)
-
-            # IR 45 องศาอุดจุดบอดมุมทแยงหน้า ที่ Sharp (ยิงตรงข้าง) และ ToF
-            # (ยิงตรงหน้า) มองไม่เห็น แต่ไม่ให้มันจบการเคลื่อนที่เอง เพราะระยะ
-            # ที่มันติดขึ้นกับการหมุน pot ของโมดูล ซึ่งเราคุมไม่ได้จากโค้ด
-            guard_dir = 0
-            if USE_IR_AS_GUARD and (left_ir or right_ir):
-                speed = min(speed, GUARD_SPEED)
-                if left_ir and not right_ir:
-                    guard_dir = 1
-                elif right_ir and not left_ir:
-                    guard_dir = -1
-
-            if guard_dir:
-                strafe = guard_dir * GUARD_STRAFE
-            else:
-                strafe = self._centering_strafe(snap)
-
-            # โหมด slant ปรับ "เป้าหมายของมุม" ไม่ใช่ไปบวกความเร็วหมุนตรง ๆ
-            # เพื่อไม่ให้ไปสู้กับตัวคุม yaw ที่กำลังดึงกลับเป้าหมายเดิมอยู่
-            target_yaw = base_target_yaw
-            if USE_IR_AS_SLANT and guard_dir:
-                target_yaw = wrap_deg(
-                    base_target_yaw + self.yaw_sign * guard_dir * IR_SLANT_BIAS_DEG)
-
-            yaw_error = wrap_deg(target_yaw - snap.yaw)
-            turn = 0.0
-            if abs(yaw_error) > YAW_HOLD_DEADBAND_DEG:
-                turn = clamp(KP_YAW_HOLD * yaw_error,
-                             -MAX_YAW_CORRECT_DPS, MAX_YAW_CORRECT_DPS)
-
-            self._drive(x=speed, y=strafe, z=self.yaw_sign * turn)
+            # คงที่ค่าเดียว ไม่มี y (strafe) ไม่มี z (yaw correction) เลย - ตาม
+            # กฎ "ห้ามปรับระหว่างทาง" ที่ตกลงกันไว้
+            self._drive(x=HOP_SPEED)
             time.sleep(CONTROL_DT)
 
         self.stop()
         time.sleep(0.15)
 
         snap = self.hub.snapshot()
-        traveled = math.hypot(snap.pos_x - start_x, snap.pos_y - start_y)
-        ok = (traveled >= CELL_SIZE_M * CELL_COMPLETE_RATIO
-              or (reason == "tof_stop"
-                  and traveled >= CELL_SIZE_M * TOF_STOP_MIN_RATIO))
+        traveled = _forward_traveled(snap)
+        ok = traveled >= CELL_SIZE_M * CELL_COMPLETE_RATIO
         print("[MOVE] {0} เดินได้ {1:.3f} m (เป้า {2:.2f}) เหตุที่จบ: {3} -> {4}"
               .format(DIR_NAMES[heading], traveled, CELL_SIZE_M, reason,
                       "สำเร็จ" if ok else "ไม่สำเร็จ"))
         return ok, traveled, reason
 
-    def backup(self, distance_m, heading):
-        """ถอยกลับตามระยะที่กำหนด เพื่อกลับไปยืนกลางช่องเดิมหลังเดินไม่ผ่าน
-
-        ถ้าไม่ถอย หุ่นจะค้างอยู่กลางทางในตำแหน่งที่ระบบไม่รู้ว่าอยู่ตรงไหน
-        แล้วการเดินครั้งถัดไปจะวัดระยะจากจุดที่ผิดตั้งแต่ต้น
+    def backup(self, distance_m):
+        """ถอยกลับตามระยะที่กำหนด ด้วยความเร็วคงที่เช่นกัน (ไม่มีการปรับทิศ
+        ระหว่างทาง เหมือน ``advance_one_cell``) เพื่อกลับไปยืนกลางช่องเดิมหลัง
+        เดินไม่ผ่าน - x ติดลบเป็นพิกัดสัมพัทธ์กับตัวรถเองอยู่แล้ว ไม่ต้องรู้
+        heading สัมบูรณ์
         """
         if distance_m < 0.03:
             return
         print("[BACK] ถอยกลับ {0:.3f} m เข้าช่องเดิม".format(distance_m))
+        self.hub.phase = "backup"
         start = self.hub.snapshot()
         start_x, start_y = start.pos_x, start.pos_y
-        target_yaw = self.heading_yaw(heading)
+        fwd_yaw_rad = math.radians(start.yaw)
+        fwd_dir_x, fwd_dir_y = math.cos(fwd_yaw_rad), math.sin(fwd_yaw_rad)
         deadline = time.time() + (distance_m / BACKUP_SPEED) * 2.0 + 1.0
 
         while time.time() < deadline:
             snap = self.hub.snapshot()
             if not snap.fresh:
                 break
-            if math.hypot(snap.pos_x - start_x, snap.pos_y - start_y) >= distance_m:
+            # โปรเจกต์ลงแกนหน้า-หลังเหมือน advance_one_cell (กันสไลด์ข้างไป
+            # รวมกับ hypot แล้วหยุดถอยก่อนถึงจริง)
+            backed = -((snap.pos_x - start_x) * fwd_dir_x
+                       + (snap.pos_y - start_y) * fwd_dir_y)
+            if backed >= distance_m:
                 break
-            yaw_error = wrap_deg(target_yaw - snap.yaw)
-            turn = 0.0
-            if abs(yaw_error) > YAW_HOLD_DEADBAND_DEG:
-                turn = clamp(KP_YAW_HOLD * yaw_error,
-                             -MAX_YAW_CORRECT_DPS, MAX_YAW_CORRECT_DPS)
-            self._drive(x=-BACKUP_SPEED, z=self.yaw_sign * turn)
+            if snap.impact or snap.roll_over:
+                print("[BACK] impact/roll_over ระหว่างถอย - หยุดทันที")
+                break
+            self._drive(x=-BACKUP_SPEED)
             time.sleep(CONTROL_DT)
 
         self.stop()
@@ -1230,16 +1710,18 @@ def export_run(maze, ts, start_cell, start_heading, end_cell, end_heading,
 
     ไฟล์ทั้งหมดตั้งชื่อด้วย ``LOG_PREFIX`` และ timestamp เดียวกัน เก็บไว้โฟลเดอร์
     เดียวกับไฟล์นี้ เพื่อให้หาไฟล์ของการวิ่งแต่ละรอบง่าย ตรงกับ deliverable ข้อ
-    1-3 ของโจทย์ (Map, Log ข้อมูลการสำรวจ, Robot Trajectory)
+    1-3 ของโจทย์ (Map, Log ข้อมูลการสำรวจ, Robot Trajectory) ส่วนข้อ 4
+    (Map Accuracy / Coverage เทียบ Ground Truth) อยู่ใน ``compare_ground_truth.py``
+    แยกไฟล์ เพราะต้องมีไฟล์ ground truth ที่อาจารย์ให้วันจริงมาเทียบด้วย
     """
-    map_txt_path = "{0}_map_{1}.txt".format(LOG_PREFIX, ts)
+    map_txt_path = _log_path("{0}_map_{1}.txt".format(LOG_PREFIX, ts))
     with open(map_txt_path, "w", encoding="utf-8") as f:
         f.write(maze.render(robot=(end_cell[0], end_cell[1], end_heading), legend=True))
         f.write("\n")
 
     # แผนที่ occupancy แบบตาราง 0=สำรวจแล้ว/โล่ง 1=ตันรอบด้าน 0.5=ยังไม่เคยไป
     # ใช้เทียบกับ Ground Truth Map ตอนพรีเซนต์ได้ง่าย (รูปแบบเดียวกันทุกกลุ่ม)
-    map_csv_path = "{0}_map_{1}.csv".format(LOG_PREFIX, ts)
+    map_csv_path = _log_path("{0}_map_{1}.csv".format(LOG_PREFIX, ts))
     with open(map_csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         for y in range(maze.height - 1, -1, -1):
@@ -1253,15 +1735,18 @@ def export_run(maze, ts, start_cell, start_heading, end_cell, end_heading,
                     row.append(0.5)
             writer.writerow(row)
 
-    steps_csv_path = "{0}_steps_{1}.csv".format(LOG_PREFIX, ts)
+    steps_csv_path = _log_path("{0}_steps_{1}.csv".format(LOG_PREFIX, ts))
     with open(steps_csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["step", "x", "y", "heading", "tof", "adc_left", "adc_right",
-                          "ir_left", "ir_right", "wall_N", "wall_E", "wall_S", "wall_W",
-                          "kind", "target", "ok"])
+        writer.writerow(["step", "x", "y", "heading",
+                          "tof_front_mm", "tof_right_mm", "tof_back_mm", "tof_left_mm",
+                          "wall_N", "wall_E", "wall_S", "wall_W",
+                          "adc_left", "adc_right", "center_iters", "center_err",
+                          "kind", "target", "ok", "reason", "impact", "slip",
+                          "cam_white_pct"])
         writer.writerows(steps_rows)
 
-    traj_csv_path = "{0}_trajectory_{1}.csv".format(LOG_PREFIX, ts)
+    traj_csv_path = _log_path("{0}_trajectory_{1}.csv".format(LOG_PREFIX, ts))
     with open(traj_csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["t", "step", "x", "y", "heading", "pos_x", "pos_y", "yaw"])
@@ -1274,13 +1759,29 @@ def export_run(maze, ts, start_cell, start_heading, end_cell, end_heading,
         "สำรวจ {0}/{1} ช่อง ({2:.1f}%)".format(
             len(maze.visited), maze.width * maze.height, maze.coverage_pct()),
         "ด้านที่ตรวจแล้ว {0}/{1}".format(seen, total_edges),
+        "กำแพงที่เคยมาร์กแล้วถูกลบภายหลัง (evicted, ยืนยันโล่งซ้ำ >= {0} ครั้ง): {1}"
+            .format(WALL_OPEN_CONFIRM_STREAK, len(maze.evicted_walls)),
     ]
-    summary_path = "{0}_summary_{1}.txt".format(LOG_PREFIX, ts)
+    for x, y, direction, streak in maze.evicted_walls:
+        summary_lines.append("  - ({0},{1}) ทิศ {2} (ยืนยันโล่ง {3} ครั้ง)"
+                              .format(x, y, DIR_NAMES[direction], streak))
+    summary_path = _log_path("{0}_summary_{1}.txt".format(LOG_PREFIX, ts))
     with open(summary_path, "w", encoding="utf-8") as f:
         f.write("\n".join(summary_lines) + "\n")
 
+    # ไฟล์ state (JSON) - ต่างจาก 4 ไฟล์ข้างบนตรงที่โหลดกลับมาสร้าง Maze ใหม่ได้
+    # ครบทุกบิต ใช้ตอนสั่ง --goto/--return-start ในภายหลัง โดยไม่ต้องสำรวจใหม่
+    state_path = _log_path("{0}_state_{1}.json".format(LOG_PREFIX, ts))
+    with open(state_path, "w", encoding="utf-8") as f:
+        json.dump({
+            "start_cell": list(start_cell), "start_heading": start_heading,
+            "end_cell": list(end_cell), "end_heading": end_heading,
+            "maze": maze.to_state(),
+        }, f, ensure_ascii=False, indent=1)
+
     print("\n[EXPORT] บันทึกผลลัพธ์แล้ว:")
-    for path in (map_txt_path, map_csv_path, steps_csv_path, traj_csv_path, summary_path):
+    for path in (map_txt_path, map_csv_path, steps_csv_path, traj_csv_path,
+                 summary_path, state_path):
         print("  - {0}".format(path))
 
 
@@ -1289,6 +1790,11 @@ def export_run(maze, ts, start_cell, start_heading, end_cell, end_heading,
 # =====================================================================
 def run_explore(hub, driver):
     """สำรวจแผนที่ที่ไม่รู้จักมาก่อนให้ครบทุกช่องที่ไปถึงได้ แล้ว export ผลลัพธ์
+
+    ลำดับต่อ 1 ช่อง: จอดนิ่ง -> สแกน ToF ครบ 4 ทิศ (ความจริงเรื่องกำแพง) ->
+    จัดกึ่งกลาง (ToF หน้า-หลัง, Sharp ซ้าย-ขวา) -> ตัดสินใจก้าวต่อไป -> เลี้ยว
+    (chassis.move()) -> ยืนยัน ToF หน้าอีกครั้งสด ๆ -> เดินหน้า (drive_speed
+    คงที่ ไม่มีการปรับใด ๆ ระหว่างทาง)
 
     Returns:
         bool: True เมื่อสำรวจจบแบบ "done" (ไม่เหลือช่องที่ไปถึงได้อีกแล้ว)
@@ -1315,122 +1821,148 @@ def run_explore(hub, driver):
     fail_count = 0
     done = False
 
-    for step in range(MAX_STEPS):
-        print("\n--- ก้าวที่ {0} | ช่อง ({1}, {2}) | หัน {3} ---"
-              .format(step, x, y, DIR_NAMES[heading]))
+    try:
+        for step in range(MAX_STEPS):
+            print("\n--- ก้าวที่ {0} | ช่อง ({1}, {2}) | หัน {3} ---"
+                  .format(step, x, y, DIR_NAMES[heading]))
 
-        driver.stop()
-        time.sleep(SETTLE_S)
-        snap = hub.snapshot()
-        if not snap.fresh:
-            print("[ERROR] เซนเซอร์ {0} ขาดการอัปเดต หยุดเพื่อความปลอดภัย"
-                  .format(snap.stale_reason))
-            break
+            driver.stop()
+            time.sleep(SETTLE_S)
+            hub.set_phase(step, "settle")
+            snap = hub.snapshot()
+            if not snap.fresh:
+                print("[ERROR] เซนเซอร์ {0} ขาดการอัปเดต หยุดเพื่อความปลอดภัย"
+                      .format(snap.stale_reason))
+                break
+            if snap.impact or snap.roll_over:
+                print("[ERROR] impact/roll_over ค้างอยู่ - หยุดเพื่อความปลอดภัย")
+                break
 
-        front, left, right = hub.read_walls_settled()
-        print("ค่าดิบ -> ToF:{0} SharpL:{1} SharpR:{2} IR_L:{3} IR_R:{4}"
-              .format(snap.tof_mm, snap.adc_left, snap.adc_right,
-                      snap.ir_left, snap.ir_right))
-        print("กำแพง -> หน้า:{0:d} ซ้าย:{1:d} ขวา:{2:d}"
-              .format(front, left, right))
+            walls = hub.read_walls_scan(heading)
+            for direction, info in walls.items():
+                maze.set_wall(x, y, direction, info["wall"])
+            maze.mark_visited(x, y)
+            print("ToF 4 ทิศ -> หน้า:{0} ขวา:{1} หลัง:{2} ซ้าย:{3} (mm)".format(
+                walls[heading]["mm"], walls[(heading + 1) % 4]["mm"],
+                walls[(heading + 2) % 4]["mm"], walls[(heading + 3) % 4]["mm"]))
 
-        maze.observe(x, y, heading, front, left, right)
-        maze.mark_visited(x, y)
-        print(maze.render(robot=(x, y, heading), legend=True))
+            center = driver.center_in_cell(walls, heading)
+            print(maze.render(robot=(x, y, heading), legend=True))
 
-        trajectory_rows.append([
-            round(time.time() - t0, 3), step, x, y, DIR_NAMES[heading],
-            round(snap.pos_x, 4), round(snap.pos_y, 4), round(snap.yaw, 2),
-        ])
-        wall_row = [int(maze.has_wall(x, y, d)) for d in (NORTH, EAST, SOUTH, WEST)]
+            hub.phase = "decide"
+            snap = hub.snapshot()
+            trajectory_rows.append([
+                round(time.time() - t0, 3), step, x, y, DIR_NAMES[heading],
+                round(snap.pos_x, 4), round(snap.pos_y, 4), round(snap.yaw, 2),
+            ])
+            wall_row = [int(maze.has_wall(x, y, d)) for d in (NORTH, EAST, SOUTH, WEST)]
+            tof_row = [walls[heading]["mm"], walls[(heading + 1) % 4]["mm"],
+                       walls[(heading + 2) % 4]["mm"], walls[(heading + 3) % 4]["mm"]]
+            lateral = center["lateral"]
+            entry_heading = heading  # heading จะถูกเปลี่ยนโดย turn_to ด้านล่าง - จับค่าไว้
+                                      # ก่อน เพราะ _log_row ต้องรายงานทิศตอนสแกน/จัดกึ่งกลาง
+                                      # ของช่องนี้ ไม่ใช่ทิศหลังเลี้ยวไปแล้ว
 
-        kind, target = planner.next_move(maze, x, y, heading)
-        if kind == "done":
-            steps_rows.append([step, x, y, DIR_NAMES[heading], snap.tof_mm,
-                                snap.adc_left, snap.adc_right, snap.ir_left,
-                                snap.ir_right, *wall_row, "done", "", True])
-            print("\n[DONE] สำรวจครบทุกช่องที่ไปถึงได้แล้ว ใช้ไป {0} ก้าว".format(step))
-            done = True
-            break
+            def _log_row(kind, target, ok, reason, cam_white_pct=None):
+                steps_rows.append([step, x, y, DIR_NAMES[entry_heading], *tof_row, *wall_row,
+                                    snap.adc_left, snap.adc_right, lateral["iters"],
+                                    lateral["final_err"], kind, target, ok, reason,
+                                    snap.impact, snap.slip, cam_white_pct])
 
-        next_heading = _edge_direction((x, y), target)
-        print("ตัดสินใจ -> {0} ไปช่อง {1} (ทาง {2})"
-              .format("เดินต่อ" if kind == "go" else "ย้อนกลับ/reroute",
-                      target, DIR_NAMES[next_heading]))
+            kind, target = planner.next_move(maze, x, y, heading)
+            if kind == "done":
+                _log_row("done", "", True, "coverage_complete")
+                print("\n[DONE] สำรวจครบทุกช่องที่ไปถึงได้แล้ว ใช้ไป {0} ก้าว".format(step))
+                done = True
+                break
 
-        heading = driver.turn_to(heading, next_heading)
+            next_heading = _edge_direction((x, y), target)
+            print("ตัดสินใจ -> {0} ไปช่อง {1} (ทาง {2})"
+                  .format("เดินต่อ" if kind == "go" else "ย้อนกลับ/reroute",
+                          target, DIR_NAMES[next_heading]))
 
-        # ตรวจ ToF อีกครั้งหลังหมุนเสร็จ ก่อนออกตัวจริง เป็นด่านสุดท้ายที่กัน
-        # ไม่ให้พุ่งชนกำแพง แต่จะมาร์กเป็นกำแพงในแผนที่ได้เฉพาะตอน kind=="go"
-        # (ช่องใหม่ที่ยังไม่เคยยืนยัน) เท่านั้น ถ้าเป็น "back" คือ edge นี้เคย
-        # ยืนยันว่าโล่งมาแล้วจริง ๆ - เจอกำแพงตอนนี้น่าจะเป็นเพราะหุ่นหลงตำแหน่ง
-        # ไม่ใช่กำแพงงอกใหม่ (แผนที่เพิ่มกำแพงได้อย่างเดียว ห้ามแก้ edge ที่ยืนยัน
-        # แล้วว่าเปิด ไม่งั้นแผนที่จะพังถาวร)
-        time.sleep(0.15)
-        snap2 = hub.snapshot()
-        if snap2.front_wall():
-            if kind == "go":
-                print("[SAFETY] หันมาแล้วเจอกำแพงที่ {0}mm - ยกเลิกการเดิน "
-                      "แล้วมาร์กลงแผนที่".format(snap2.tof_mm))
-                maze.set_wall(x, y, heading, True)
-                if planner.stack and planner.stack[-1] == target:
-                    planner.stack.pop()
-            else:
-                print("[SAFETY] หันมาแล้วเจอกำแพงที่ {0}mm บนทางที่เคยยืนยันว่าโล่ง "
-                      "- ไม่แก้แผนที่ น่าจะหลงตำแหน่ง ลองใหม่รอบหน้า".format(snap2.tof_mm))
-            steps_rows.append([step, x, y, DIR_NAMES[heading], snap.tof_mm,
-                                snap.adc_left, snap.adc_right, snap.ir_left,
-                                snap.ir_right, *wall_row, kind, target, False])
-            continue
+            hub.phase = "turn"
+            heading = driver.turn_to(heading, next_heading)
 
-        ok, traveled, _ = driver.advance_one_cell(heading)
-        steps_rows.append([step, x, y, DIR_NAMES[heading], snap.tof_mm,
-                            snap.adc_left, snap.adc_right, snap.ir_left,
-                            snap.ir_right, *wall_row, kind, target, ok])
-
-        if ok:
-            x, y = target
-            fail_key = None
-            fail_count = 0
-        else:
-            key = (x, y, heading)
-            fail_count = fail_count + 1 if key == fail_key else 1
-            fail_key = key
-
-            if kind == "go":
-                # ช่องใหม่ที่ยังไม่เคยยืนยัน - เชื่อ ToF หรือความล้มเหลวซ้ำได้
-                snap3 = hub.snapshot()
-                if snap3.front_wall():
-                    print("[RECOVER] ยืนยันด้วย ToF ว่ามีกำแพงจริง มาร์กลงแผนที่")
+            # ยืนยัน ToF หน้าอีกครั้งสด ๆ หลังหมุนเสร็จ (gimbal ชี้หน้าแล้วจาก turn_to)
+            # ก่อนออกตัวจริง เป็นด่านสุดท้ายที่กันไม่ให้พุ่งชนกำแพง แต่จะมาร์กเป็น
+            # กำแพงในแผนที่ได้เฉพาะตอน kind=="go" (edge ที่ยังไม่เคยยืนยัน) เท่านั้น
+            # ถ้าเป็น "back" (edge เคยยืนยันว่าโล่งจากการเดินผ่านจริงมาแล้ว) จะไม่แตะ
+            # แผนที่เด็ดขาด เพราะเจอกำแพงตอนนี้น่าจะเป็นเพราะหุ่นหลงตำแหน่ง ไม่ใช่
+            # กำแพงงอกใหม่ - การเรียก set_wall(present=True) มีผลทันทีเสมอ (ไม่มี
+            # streak ป้องกันฝั่งเพิ่ม) จึงต้องกันด้วยเงื่อนไข kind ตรงนี้ ไม่ใช่ปล่อย
+            # ให้ Maze ตัดสินใจเอง
+            front_mm = hub.read_tof(GIMBAL_YAW_FRONT, phase="turn_verify")
+            if tof_is_wall(front_mm, FRONT_STOP_MM):
+                if kind == "go":
+                    print("[SAFETY] หันมาแล้วเจอกำแพงที่ {0}mm - ยกเลิกการเดิน "
+                          "แล้วมาร์กลงแผนที่".format(front_mm))
                     maze.set_wall(x, y, heading, True)
-                elif fail_count >= 2:
-                    print("[RECOVER] เดินไม่ผ่านทางเดิมเป็นครั้งที่ {0} ทั้งที่ ToF "
-                          "ว่าโล่ง - ปิดทางนี้ไว้ก่อนเพื่อไม่ให้ติดวนอยู่ที่เดิม"
-                          .format(fail_count))
-                    maze.set_wall(x, y, heading, True)
+                    if planner.stack and planner.stack[-1] == target:
+                        planner.stack.pop()
                 else:
-                    print("[RECOVER] ToF บอกว่าข้างหน้าโล่ง แต่เดินไม่ไป "
-                          "น่าจะล้อลื่นหรือติดขัด - ลองใหม่อีกครั้งก่อนตัดสิน")
-                if planner.stack and planner.stack[-1] == target:
-                    planner.stack.pop()
+                    print("[SAFETY] หันมาแล้วเจอกำแพงที่ {0}mm บนทางที่เคยยืนยันว่าโล่ง "
+                          "- ไม่แก้แผนที่ น่าจะหลงตำแหน่ง ลองใหม่รอบหน้า".format(front_mm))
+                _log_row(kind, target, False, "safety_wall")
+                continue
+
+            # แก้ดริฟท์ด้านข้างจากการหมุน (ดู recenter_lateral docstring) - ยัง
+            # จอดนิ่งอยู่ ยังไม่เริ่มเดินหน้า จึงไม่ขัดกฎ "ห้ามปรับระหว่างทาง"
+            hub.phase = "center_lateral_post_turn"
+            driver.recenter_lateral(walls, heading)
+
+            cam = hub.log_camera_frame("step{0:03d}".format(step))  # log-only, ไม่กระทบตัดสินใจ
+            ok, traveled, reason = driver.advance_one_cell(heading)
+            _log_row(kind, target, ok, reason, cam["white_pct"])
+
+            if ok:
+                x, y = target
+                fail_key = None
+                fail_count = 0
             else:
-                # kind == "back": edge นี้เคยยืนยันว่าโล่งแล้วจริง ๆ ห้ามมาร์กเป็น
-                # กำแพง ถือเป็นปัญหาการเดิน (หลงตำแหน่ง/ล้อลื่น) ไม่ใช่ปัญหาแผนที่
-                print("[RECOVER] ย้อนกลับ/reroute ไปช่อง {0} ไม่สำเร็จ (ครั้งที่ {1}) "
-                      "- ไม่แก้แผนที่ เพราะทางนี้เคยยืนยันว่าโล่งแล้ว"
-                      .format(target, fail_count))
-                if fail_count >= BACK_RETRY:
-                    if planner.has_other_exit(maze, (x, y), target):
-                        print("[RECOVER] ปิดทางนี้ไว้ก่อน มีทางออกอื่นให้ไปแทน")
-                        planner.block_edge((x, y), target)
+                key = (x, y, heading)
+                fail_count = fail_count + 1 if key == fail_key else 1
+                fail_key = key
+
+                if kind == "go":
+                    # ช่องใหม่ที่ยังไม่เคยยืนยัน - เชื่อ ToF หรือความล้มเหลวซ้ำได้
+                    front_mm2 = hub.read_tof(GIMBAL_YAW_FRONT, phase="recover_verify")
+                    if tof_is_wall(front_mm2, FRONT_STOP_MM):
+                        print("[RECOVER] ยืนยันด้วย ToF ว่ามีกำแพงจริง มาร์กลงแผนที่")
+                        maze.set_wall(x, y, heading, True)
+                    elif fail_count >= 2:
+                        print("[RECOVER] เดินไม่ผ่านทางเดิมเป็นครั้งที่ {0} ทั้งที่ ToF "
+                              "ว่าโล่ง - ปิดทางนี้ไว้ก่อนเพื่อไม่ให้ติดวนอยู่ที่เดิม"
+                              .format(fail_count))
+                        maze.set_wall(x, y, heading, True)
                     else:
-                        print("[RECOVER] ทางนี้เป็นทางออกทางเดียวของช่องนี้ "
-                              "- ไม่ปิด ลองใหม่ต่อไป")
-                    fail_key = None
-                    fail_count = 0
-            driver.backup(traveled, heading)
-    else:
-        print("\n[FAIL] ครบ {0} ก้าวแล้วยังสำรวจไม่ครบ".format(MAX_STEPS))
+                        print("[RECOVER] ToF บอกว่าข้างหน้าโล่ง แต่เดินไม่ไป "
+                              "น่าจะล้อลื่นหรือติดขัด - ลองใหม่อีกครั้งก่อนตัดสิน")
+                    if planner.stack and planner.stack[-1] == target:
+                        planner.stack.pop()
+                else:
+                    # kind == "back": edge นี้เคยยืนยันว่าโล่งแล้วจริง ๆ ห้ามมาร์กเป็น
+                    # กำแพง ถือเป็นปัญหาการเดิน (หลงตำแหน่ง/ล้อลื่น) ไม่ใช่ปัญหาแผนที่
+                    print("[RECOVER] ย้อนกลับ/reroute ไปช่อง {0} ไม่สำเร็จ (ครั้งที่ {1}) "
+                          "- ไม่แก้แผนที่ เพราะทางนี้เคยยืนยันว่าโล่งแล้ว"
+                          .format(target, fail_count))
+                    if fail_count >= BACK_RETRY:
+                        if planner.has_other_exit(maze, (x, y), target):
+                            print("[RECOVER] ปิดทางนี้ไว้ก่อน มีทางออกอื่นให้ไปแทน")
+                            planner.block_edge((x, y), target)
+                        else:
+                            print("[RECOVER] ทางนี้เป็นทางออกทางเดียวของช่องนี้ "
+                                  "- ไม่ปิด ลองใหม่ต่อไป")
+                        fail_key = None
+                        fail_count = 0
+                driver.backup(traveled)
+        else:
+            print("\n[FAIL] ครบ {0} ก้าวแล้วยังสำรวจไม่ครบ".format(MAX_STEPS))
+    except KeyboardInterrupt:
+        print("[STOP] ผู้ใช้สั่งหยุดกลางคัน (Ctrl+C) - จะ export สิ่งที่เก็บมาได้ทั้งหมดก่อน")
+    except Exception as exc:                                # noqa: BLE001
+        print("[CRASH] เกิดข้อผิดพลาดกลางคัน: {0} - จะ export สิ่งที่เก็บมาได้ทั้งหมดก่อน".format(exc))
+        traceback.print_exc()
 
     driver.stop()
     seen, total_edges = maze.edge_stats()
@@ -1445,7 +1977,99 @@ def run_explore(hub, driver):
 
     export_run(maze, ts, START_CELL, START_HEADING, (x, y), heading,
                steps_rows, trajectory_rows)
-    return done
+    #: (bool, Maze, int, int, int): เผื่อผู้เรียก (main) อยากสั่งต่อทันทีแบบ
+    #: ``--goto``/``--return-start`` โดยไม่ต้องสำรวจใหม่ - ตำแหน่ง/แผนที่ยังอยู่
+    #: ในหน่วยความจำ ไม่ต้องโหลดจากไฟล์เลย (odometry ยัง live ต่อเนื่อง)
+    return done, maze, x, y, heading
+
+
+# =====================================================================
+# โหมด --goto / --return-start : ใช้แผนที่ที่สำรวจไว้แล้วเดินไปช่องเป้าหมาย
+# =====================================================================
+def find_latest_state_file():
+    """str or None: path ของไฟล์ state (``*_state_*.json``) ล่าสุดในโฟลเดอร์นี้
+
+    ชื่อไฟล์ลงท้ายด้วย timestamp แบบ ``YYYYMMDD_HHMMSS`` ซึ่งเรียงเป็น string
+    ได้ตรงกับเวลาจริงพอดี จึงหาไฟล์ล่าสุดด้วย ``max()`` ธรรมดาได้เลย
+    """
+    matches = sorted(glob.glob(_log_path("{0}_state_*.json".format(LOG_PREFIX))))
+    return matches[-1] if matches else None
+
+
+def load_state(path):
+    """dict: โหลดไฟล์ state กลับมาเป็น Maze + ตำแหน่งเริ่ม/จบตอนสำรวจครั้งนั้น"""
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return {
+        "maze": Maze.from_state(data["maze"]),
+        "start_cell": tuple(data["start_cell"]),
+        "start_heading": data["start_heading"],
+        "end_cell": tuple(data["end_cell"]),
+        "end_heading": data["end_heading"],
+    }
+
+
+def run_goto(hub, driver, maze, x, y, heading, target_cell):
+    """เดินตามแผนที่ที่รู้อยู่แล้ว (ไม่สำรวจใหม่) จากตำแหน่งปัจจุบันไปช่อง
+    ``target_cell`` ใช้เส้นทางที่สั้นสุดผ่านเฉพาะด้านที่ยืนยันแล้วว่าโล่งจริง
+    (``Maze.shortest_known_path`` - เข้มงวดกว่า optimistic flood fill ตอน
+    สำรวจ เพราะตอนนี้ไม่ได้กำลังสำรวจแล้ว ต้องมั่นใจว่าเดินได้จริงทุกก้าว)
+
+    ใช้ primitive การเดินชุดเดียวกับตอนสำรวจทุกอย่าง (``turn_to``,
+    ``advance_one_cell``, ``center_in_cell``) ต่างกันแค่ไม่มาร์กกำแพงใหม่ลง
+    แผนที่เลย (เส้นทางทุก edge ยืนยันโล่งอยู่แล้วจากการสำรวจครั้งก่อน ถ้าเดิน
+    ไม่ผ่านตอนนี้คือปัญหาการเดิน/หลงตำแหน่ง ไม่ใช่ปัญหาแผนที่ - เหมือน kind
+    "back" ตอนสำรวจ)
+
+    Returns:
+        tuple: (ok, x, y, heading) - ``ok`` เป็น False ถ้าไปไม่ถึงเป้าหมาย
+        (ไม่ว่าเพราะแผนที่ไม่รู้จักเส้นทาง หรือเดินจริงไม่ผ่านซ้ำ ๆ)
+    """
+    if not maze.in_bounds(*target_cell):
+        print("[GOTO] ช่องเป้าหมาย {0} อยู่นอกสนาม {1}x{2}"
+              .format(target_cell, maze.width, maze.height))
+        return False, x, y, heading
+
+    path = maze.shortest_known_path((x, y), target_cell)
+    if path is None:
+        print("[GOTO] ไม่มีเส้นทางที่ยืนยันแล้วว่าโล่งไปช่อง {0} จากความรู้ปัจจุบัน "
+              "(ถ้าเพิ่งสำรวจครบ 100% ไม่ควรเกิดกรณีนี้)".format(target_cell))
+        return False, x, y, heading
+
+    print("[GOTO] เส้นทาง {0} -> {1}: {2}".format((x, y), target_cell, path))
+    for step_idx in range(len(path) - 1):
+        cur, nxt = path[step_idx], path[step_idx + 1]
+        next_heading = _edge_direction(cur, nxt)
+        hub.set_phase(step_idx, "goto_turn")
+        heading = driver.turn_to(heading, next_heading)
+
+        front_mm = hub.read_tof(GIMBAL_YAW_FRONT, phase="goto_turn_verify")
+        if tof_is_wall(front_mm, FRONT_STOP_MM):
+            print("[GOTO] หันมาแล้วเจอกำแพงที่ {0}mm บนทางที่เคยยืนยันว่าโล่ง "
+                  "- น่าจะหลงตำแหน่ง หยุดภารกิจ goto ไว้ก่อน".format(front_mm))
+            return False, x, y, heading
+
+        ok = False
+        traveled = 0.0
+        for attempt in range(BACK_RETRY):
+            ok, traveled, reason = driver.advance_one_cell(heading)
+            if ok:
+                break
+            print("[GOTO] เดิน {0}->{1} ไม่ผ่าน (ครั้งที่ {2}, เหตุผล {3}) "
+                  "ถอยแล้วลองใหม่".format(cur, nxt, attempt + 1, reason))
+            driver.backup(traveled)
+        if not ok:
+            print("[GOTO] เดิน {0}->{1} ไม่ผ่านซ้ำ {2} ครั้ง - หยุดภารกิจ goto ไว้ก่อน "
+                  "ที่ช่อง {3}".format(cur, nxt, BACK_RETRY, cur))
+            return False, x, y, heading
+
+        x, y = nxt
+        walls = hub.read_walls_scan(heading)
+        driver.center_in_cell(walls, heading)
+        print("[GOTO] ถึงช่อง {0} แล้ว หัน {1}".format((x, y), DIR_NAMES[heading]))
+
+    print("[GOTO] ถึงเป้าหมาย {0} แล้ว".format(target_cell))
+    return True, x, y, heading
 
 
 # =====================================================================
@@ -1453,6 +2077,7 @@ def run_explore(hub, driver):
 # =====================================================================
 def _collect(hub, samples=40, interval=0.05, label=""):
     """เก็บตัวอย่างค่าเซนเซอร์ตามจำนวนที่กำหนด แล้วคืนเป็น dict ของ list"""
+    hub.phase = "calib_" + label if label else "calib"
     data = {"adc_l": [], "adc_r": [], "ir_l": [], "ir_r": [], "tof": []}
     for _ in range(samples):
         snap = hub.snapshot()
@@ -1497,81 +2122,60 @@ def _mode_value(values):
     return max(set(values), key=values.count)
 
 
-def _threshold(wall_mean, wall_sd, open_mean, open_sd):
-    """คำนวณคู่ threshold แบบมี hysteresis จากสองกลุ่มตัวอย่าง
-
-    จุดแบ่งถูกถ่วงน้ำหนักด้วยส่วนเบี่ยงเบนของแต่ละกลุ่ม กลุ่มที่ค่ากระจายมากกว่า
-    จะได้พื้นที่กว้างกว่า แล้วเปิดช่องว่างรอบจุดแบ่งไว้เป็น hysteresis เพื่อไม่ให้
-    ค่าที่แกว่งอยู่แถวเส้นทำให้สถานะกำแพงกระพริบไปมา
-
-    Returns:
-        tuple: (enter, exit, separation) โดย separation คือระยะห่างของสองกลุ่ม
-        วัดเป็นจำนวนเท่าของผลรวมส่วนเบี่ยงเบน
-    """
-    gap = wall_mean - open_mean
-    sd_sum = wall_sd + open_sd
-    if sd_sum > 1e-9:
-        split = (wall_mean * open_sd + open_mean * wall_sd) / sd_sum
-        separation = abs(gap) / sd_sum
-    else:
-        split = (wall_mean + open_mean) / 2.0
-        separation = float("inf")
-
-    band = max(3.0 * max(wall_sd, open_sd), 0.10 * abs(gap))
-    band = min(band, 0.6 * abs(gap))
-    if gap > 0:
-        enter, exit_ = split + band / 2.0, split - band / 2.0
-    else:
-        enter, exit_ = split - band / 2.0, split + band / 2.0
-    return int(round(enter)), int(round(exit_)), separation
-
-
 def run_calibration(hub):
-    """ไล่วัดค่าเซนเซอร์ทีละขั้น แล้วพิมพ์บล็อก CONFIG ที่คัดลอกไปวางได้เลย"""
+    """ไล่วัดค่าเซนเซอร์ทีละขั้น แล้วพิมพ์บล็อก CONFIG ที่คัดลอกไปวางได้เลย
+
+    หุ่นไม่ขยับเองตลอดกระบวนการนี้ (ผู้ใช้เป็นคนย้ายหุ่นเองตามคำสั่ง) ยกเว้น
+    gimbal ที่หมุนไปมาเพื่ออ่าน ToF ทิศต่าง ๆ และ gimbal-yaw-sign self-test
+    """
     print("\n" + "=" * 62)
-    print("  โหมดคาลิเบรตเซนเซอร์ - หุ่นจะไม่ขยับตลอดกระบวนการนี้")
+    print("  โหมดคาลิเบรตเซนเซอร์")
     print("=" * 62)
     if not hub.use_adapter:
         print("[WARN] กำลังใช้ fallback get_adc ซึ่งช้า การเก็บตัวอย่างจะนานขึ้น")
 
-    print("\n[1/6] วางหุ่น 'กลางช่อง' ที่มีกำแพงทั้งซ้ายและขวา")
+    print("\n[gimbal] หา gimbal_yaw_sign อัตโนมัติ (หมุนทดสอบสั้น ๆ)...")
+    hub.calibrate_gimbal_yaw_sign()
+
+    print("\n[1/5] วางหุ่น 'กลางช่อง' ที่มีกำแพงทั้งซ้ายและขวา หันหน้าไปทางไหนก็ได้")
     print("      ตำแหน่งต้องอยู่กลางจริง ๆ เพราะค่านี้จะกลายเป็นจุดอ้างอิงที่")
-    print("      ตัวคุมใช้ประคองหุ่นให้อยู่กลางช่องตอนวิ่ง")
+    print("      ใช้จัดกึ่งกลางซ้าย-ขวาตอนจอดทุกครั้ง")
     input("      พร้อมแล้วกด Enter...")
     walls = _collect(hub, label="กำแพงสองข้าง")
+    side_mm_left = hub.read_tof(GIMBAL_YAW_LEFT)
+    side_mm_right = hub.read_tof(GIMBAL_YAW_RIGHT)
+    hub.point_gimbal(GIMBAL_YAW_FRONT)
+    print("      ToF ซ้าย={0}mm ขวา={1}mm".format(side_mm_left, side_mm_right))
 
-    ir_l_walls = _mode_value(walls["ir_l"])
-    ir_r_walls = _mode_value(walls["ir_r"])
-    print("      IR 45 องศาตอนนี้อ่านได้ L={0} R={1}".format(ir_l_walls, ir_r_walls))
-
-    print("\n[2/6] ย้ายหุ่นไปช่องที่ 'ไม่มีกำแพงทั้งสองข้าง'")
+    print("\n[2/5] ขยับหุ่นให้ชิดกำแพง 'ด้านซ้าย' มาก ๆ (ราว 5 ซม.) โดยยังอยู่")
+    print("      แนวเดิม (ไม่หมุนตัว) - ขั้นนี้หาว่า ADC ซ้ายสูงขึ้นหรือต่ำลง")
+    print("      เมื่อเข้าใกล้กำแพง")
     input("      พร้อมแล้วกด Enter...")
-    opens = _collect(hub, label="ไม่มีกำแพง")
+    close_left = _collect(hub, label="ชิดกำแพงซ้าย")
 
-    print("\n[3/6] ขยับหุ่นให้ชิดกำแพง 'ด้านซ้าย' มาก ๆ (ราว 5 ซม.)")
-    print("      ขั้นนี้ตรวจกับดักของ Sharp ที่เมื่อใกล้เกินพิสัย ค่าจะย้อนกลับลง")
-    print("      ทำให้กำแพงที่ใกล้มากอ่านได้เท่ากับกำแพงที่ไกล")
+    print("\n[3/5] ขยับหุ่นให้ชิดกำแพง 'ด้านขวา' มาก ๆ แทน (ราว 5 ซม.)")
     input("      พร้อมแล้วกด Enter...")
-    very_close = _collect(hub, label="ชิดกำแพงซ้าย")
+    close_right = _collect(hub, label="ชิดกำแพงขวา")
 
-    print("\n[4/6] เอามือบังหน้าเซนเซอร์ IR 45 องศา 'ทั้งสองตัว' ไว้")
-    input("      พร้อมแล้วกด Enter...")
-    ir_blocked = _collect(hub, samples=20)
-    print("      IR ตอนถูกบัง: L={0} R={1}".format(_mode_value(ir_blocked["ir_l"]),
-                                                   _mode_value(ir_blocked["ir_r"])))
-
-    print("\n[5/6] เอามือออกให้ IR ทั้งสองตัวโล่ง")
-    input("      พร้อมแล้วกด Enter...")
-    ir_clear = _collect(hub, samples=20)
-    print("      IR ตอนโล่ง:   L={0} R={1}".format(_mode_value(ir_clear["ir_l"]),
-                                                   _mode_value(ir_clear["ir_r"])))
-
-    print("\n[6/6] วางหุ่น 'กลางช่อง' โดยหันหน้าชนกำแพง")
+    print("\n[4/6] วางหุ่น 'กลางช่อง' โดยหันหน้าชนกำแพง (ไม่ต้องมีกำแพงข้าง)")
     print("      ค่านี้จะกลายเป็นระยะที่หุ่นใช้หยุดตอนเข้าช่องที่มีกำแพงข้างหน้า")
     input("      พร้อมแล้วกด Enter...")
-    facing = _collect(hub, samples=30)
-    tof_mean, tof_sd = _stats(facing["tof"])
-    print("      ToF: {0}".format(_fmt(facing["tof"]) if facing["tof"] else "ไม่มีข้อมูล"))
+    front_mm = hub.read_tof(GIMBAL_YAW_FRONT)
+    print("      ToF หน้า={0}mm".format(front_mm))
+    hub.log_camera_frame("calib_front_wall")
+
+    print("\n[5/6] (ถ้ามีกล้อง) หันหุ่นให้มองไปทางที่ 'ไม่มีกำแพงข้างหน้า' แทน "
+          "(เช่น หันไปทางเดินโล่งๆ) - ขั้นนี้แค่เก็บรูป/สี % ขาวไว้เทียบ ไม่มีผล "
+          "ต่อการตัดสินใจอะไรเลย")
+    input("      พร้อมแล้วกด Enter (หรือ Enter เฉยๆ เพื่อข้าม)...")
+    hub.log_camera_frame("calib_front_open")
+
+    print("\n[6/6] เอามือบังหน้าเซนเซอร์ IR 45 องศา 'ทั้งสองตัว' พร้อมกันไว้")
+    input("      พร้อมแล้วกด Enter...")
+    ir_blocked = _collect(hub, samples=20)
+    print("\n      เอามือออกให้ IR ทั้งสองตัวโล่ง")
+    input("      พร้อมแล้วกด Enter...")
+    ir_clear = _collect(hub, samples=20)
 
     # ---------- สรุปผล ----------
     print("\n" + "=" * 62)
@@ -1579,38 +2183,34 @@ def run_calibration(hub):
     print("=" * 62)
 
     problems = []
-    results = {}
-    for side, key, ref_name in (("ซ้าย", "adc_l", "SHARP_LEFT"),
-                                ("ขวา", "adc_r", "SHARP_RIGHT")):
-        wall_mean, wall_sd = _stats(walls[key])
-        open_mean, open_sd = _stats(opens[key])
-        if wall_mean is None or open_mean is None:
+    sharp_ref = {}
+    sharp_polarity = {}
+    for side, key, close_data, ref_name, pol_name in (
+            ("ซ้าย", "adc_l", close_left, "SHARP_LEFT_REF", "SHARP_LEFT_CLOSER_IS_HIGHER"),
+            ("ขวา", "adc_r", close_right, "SHARP_RIGHT_REF", "SHARP_RIGHT_CLOSER_IS_HIGHER")):
+        ref_mean, ref_sd = _stats(walls[key])
+        close_mean, close_sd = _stats(close_data[key])
+        if ref_mean is None:
             problems.append("Sharp{0}: ไม่ได้รับค่า ADC เลย ตรวจการต่อสาย".format(side))
             continue
-        enter, exit_, separation = _threshold(wall_mean, wall_sd, open_mean, open_sd)
-        results[ref_name] = (enter, exit_, int(round(wall_mean)))
-        mark = "ผ่าน" if separation >= 3.0 else "ไม่ผ่าน"
-        print("  Sharp{0}: มีกำแพง {1:.1f}  ไม่มีกำแพง {2:.1f}  "
-              "ห่างกัน {3:.1f} SD [{4}]"
-              .format(side, wall_mean, open_mean, separation, mark))
-        if separation < 3.0:
+        sharp_ref[ref_name] = int(round(ref_mean))
+        print("  Sharp{0}: กลางช่อง {1:.1f} (sd {2:.1f})".format(side, ref_mean, ref_sd))
+        if close_mean is None:
             problems.append(
-                "Sharp{0}: สองกลุ่มห่างกันแค่ {1:.1f} SD ซึ่งน้อยเกินจะแยกได้แน่นอน "
-                "ควรขยับตำแหน่งหรือมุมติดตั้งเซนเซอร์ก่อนแล้วคาลิเบรตใหม่"
-                .format(side, separation))
-
-    close_mean, _ = _stats(very_close["adc_l"])
-    wall_l_mean, _ = _stats(walls["adc_l"])
-    if close_mean is not None and wall_l_mean is not None and "SHARP_LEFT" in results:
-        rising = results["SHARP_LEFT"][0] > results["SHARP_LEFT"][1]
-        monotonic = close_mean > wall_l_mean if rising else close_mean < wall_l_mean
-        print("  ชิดกำแพงมาก: {0:.1f} เทียบกับกำแพงปกติ {1:.1f} -> {2}"
-              .format(close_mean, wall_l_mean,
-                      "ผ่าน ค่ายังไปทางเดิม" if monotonic else "ไม่ผ่าน ค่าย้อนกลับ"))
-        if not monotonic:
+                "Sharp{0}: ขั้นชิดกำแพงไม่ได้ค่า - ตั้ง CLOSER_IS_HIGHER ไม่ได้ "
+                "ต้องคาลิเบรตใหม่ก่อนใช้งานจริง".format(side))
+            continue
+        closer_is_higher = close_mean > ref_mean
+        sharp_polarity[pol_name] = closer_is_higher
+        gap = abs(close_mean - ref_mean)
+        print("  Sharp{0}: ชิดมาก {1:.1f} (sd {2:.1f}) -> closer_is_higher={3} "
+              "(ห่างจากกลางช่อง {4:.1f})"
+              .format(side, close_mean, close_sd, closer_is_higher, gap))
+        if gap < 15:
             problems.append(
-                "Sharp ซ้าย: ที่ระยะใกล้มากค่าย้อนกลับ ถ้าหุ่นเบี่ยงไปชิดกำแพง "
-                "เมื่อไหร่จะอ่านผิดว่าไม่มีกำแพง ควรถอยเซนเซอร์ให้ห่างกำแพงขึ้น")
+                "Sharp{0}: ค่าตอนชิดกำแพงกับตอนกลางช่างต่างกันแค่ {1:.1f} ADC "
+                "น้อยเกินจะแยกได้แน่นอน ลองขยับให้ชิดกำแพงกว่านี้แล้ววัดใหม่"
+                .format(side, gap))
 
     ir_value = None
     for side, key in (("ซ้าย", "ir_l"), ("ขวา", "ir_r")):
@@ -1632,17 +2232,11 @@ def run_calibration(hub):
                     "IR ซ้ายกับขวาใช้ตรรกะกลับด้านกัน โค้ดรองรับได้ค่าเดียว "
                     "ต้องตั้ง pot หรือสลับสายให้เหมือนกันก่อน")
 
-    if ir_value is not None and ir_l_walls == ir_value and ir_r_walls == ir_value:
-        problems.append(
-            "IR 45 องศาติดตั้งแต่ตอนอยู่กลางช่องที่มีกำแพงปกติ แปลว่าตั้งระยะไว้ไกล "
-            "เกินไป จะติดตลอดเวลาในทางเดินทุกช่องจนไม่มีประโยชน์ "
-            "ควรหมุน pot ให้ระยะสั้นลงจนไม่ติดตอนอยู่กลางช่อง")
-
-    if tof_mean is None:
-        problems.append("ToF: ไม่ได้รับค่า ตรวจว่าเสียบโมดูลและ TOF_INDEX ถูกตัวหรือไม่")
-    else:
-        print("  ToF ตอนจอดกลางช่องชนกำแพง: {0:.0f} mm (sd {1:.1f})"
-              .format(tof_mean, tof_sd))
+    if front_mm is None:
+        problems.append("ToF หน้า: ไม่ได้รับค่า ตรวจว่าเสียบโมดูลและ TOF_INDEX ถูกตัวหรือไม่")
+    if side_mm_left is None or side_mm_right is None:
+        problems.append("ToF ข้าง (ผ่าน gimbal): อ่านไม่ได้อย่างน้อย 1 ทิศ ตรวจว่ากำแพง"
+                          "ทั้งสองข้างอยู่ในระยะจริงตอนขั้นที่ 1")
 
     print("\n" + "-" * 62)
     if problems:
@@ -1653,24 +2247,16 @@ def run_calibration(hub):
 
     print("\nคัดลอกบล็อกนี้ไปวางทับใน CONFIG ด้านบนของไฟล์:\n")
     def _show(name, value):
-        print("{0:<22}= {1}".format(name, value))
+        print("{0:<30}= {1}".format(name, value))
 
-    _show("SHARP_LEFT_WALL_ADC",
-          "({0}, {1})".format(*results["SHARP_LEFT"][:2])
-          if "SHARP_LEFT" in results else "None   # วัดไม่ได้")
-    _show("SHARP_RIGHT_WALL_ADC",
-          "({0}, {1})".format(*results["SHARP_RIGHT"][:2])
-          if "SHARP_RIGHT" in results else "None   # วัดไม่ได้")
-    _show("SHARP_LEFT_REF",
-          results["SHARP_LEFT"][2] if "SHARP_LEFT" in results else "None")
-    _show("SHARP_RIGHT_REF",
-          results["SHARP_RIGHT"][2] if "SHARP_RIGHT" in results else "None")
+    _show("FRONT_STOP_MM", int(round(front_mm)) if front_mm is not None else "None")
+    side_vals = [v for v in (side_mm_left, side_mm_right) if v is not None]
+    _show("SIDE_STOP_MM", int(round(sum(side_vals) / len(side_vals))) if side_vals else "None")
+    _show("SHARP_LEFT_REF", sharp_ref.get("SHARP_LEFT_REF", "None"))
+    _show("SHARP_RIGHT_REF", sharp_ref.get("SHARP_RIGHT_REF", "None"))
+    _show("SHARP_LEFT_CLOSER_IS_HIGHER", sharp_polarity.get("SHARP_LEFT_CLOSER_IS_HIGHER", "None"))
+    _show("SHARP_RIGHT_CLOSER_IS_HIGHER", sharp_polarity.get("SHARP_RIGHT_CLOSER_IS_HIGHER", "None"))
     _show("IR_TRIGGERED_VALUE", ir_value if ir_value is not None else "None")
-    _show("FRONT_STOP_MM",
-          int(round(tof_mean)) if tof_mean is not None else "None")
-    if tof_mean is not None:
-        print("\n# เกณฑ์ตรวจกำแพงหน้าจะถูกคำนวณเป็น {0} mm โดยอัตโนมัติ"
-              .format(int(round(tof_mean)) + int(CELL_SIZE_M * 1000 / 2)))
     print()
 
 
@@ -1785,6 +2371,60 @@ def run_sim():
 # =====================================================================
 # MAIN
 # =====================================================================
+def _parse_cell(text):
+    """tuple: แปลง 'x,y' เป็น (int, int) - raise ValueError พร้อมข้อความอ่านง่าย"""
+    parts = text.split(",")
+    if len(parts) != 2:
+        raise ValueError("'{0}' ไม่ใช่รูปแบบ x,y (เช่น 2,3)".format(text))
+    try:
+        return int(parts[0].strip()), int(parts[1].strip())
+    except ValueError:
+        raise ValueError("'{0}' ไม่ใช่รูปแบบ x,y (เช่น 2,3)".format(text))
+
+
+def _prompt_current_pose(default_cell, default_heading):
+    """tuple: ถามผู้ใช้ว่าหุ่นตอนนี้อยู่ช่องไหน หันทางไหนจริง ๆ
+
+    จำเป็นเพราะ odometry รีเซ็ตทุกครั้งที่เชื่อมต่อหุ่นใหม่ - โปรแกรมจำ
+    ตำแหน่งข้ามการเชื่อมต่อเองไม่ได้ ต้องให้คนที่วางหุ่นเป็นคนยืนยัน
+    ค่าเริ่มต้นคือตำแหน่ง/ทิศที่บันทึกไว้ตอนจบการสำรวจครั้งก่อน (ที่ที่หุ่นน่าจะ
+    อยู่จริง ถ้าไม่ได้ยกหุ่นไปวางที่อื่นหลังสำรวจเสร็จ)
+    """
+    print("\n[GOTO] หุ่นต้องอยู่กลางช่องจริง ๆ ก่อนเริ่ม (โปรแกรมจำตำแหน่งข้าม"
+          "การเชื่อมต่อเองไม่ได้ ต้องยืนยันจากคนตอนนี้)")
+    text = input("      ตอนนี้หุ่นอยู่ช่องไหน หันทางไหน [Enter = {0} หัน {1}]: "
+                 .format(default_cell, DIR_NAMES[default_heading])).strip()
+    if not text:
+        return default_cell, default_heading
+    cell_part, _, heading_part = text.partition(" ")
+    cx, cy = _parse_cell(cell_part)
+    heading_part = heading_part.strip().upper()
+    heading = DIR_NAMES.index(heading_part) if heading_part else default_heading
+    return (cx, cy), heading
+
+
+class _Tee(object):
+    """เขียนซ้ำทุกอย่างที่ ``print()``/stdout ส่งออกมา ทั้งจอและไฟล์ log พร้อมกัน
+
+    ``flush()`` ทันทีทุกครั้งที่เขียน (ไม่รอ buffer) เพื่อให้ต่อให้โปรแกรมถูก
+    kill กลางทาง (Ctrl+C ค้าง, แครช, ไฟดับ) ก็ยังมีไฟล์ log อยู่จนถึงบรรทัด
+    สุดท้ายที่พิมพ์จริง - ไม่ต้องพึ่ง export_run ตอนจบเพียงอย่างเดียวเหมือนเดิม
+    (ซึ่งจะไม่ทำงานเลยถ้าโปรแกรมไม่ได้จบทางปกติ)
+    """
+
+    def __init__(self, *streams):
+        self._streams = streams
+
+    def write(self, data):
+        for s in self._streams:
+            s.write(data)
+            s.flush()
+
+    def flush(self):
+        for s in self._streams:
+            s.flush()
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="SLAM สำรวจแผนที่ไม่รู้จักให้ครบ สำหรับ RoboMaster EP (Class Work 8)")
@@ -1792,62 +2432,132 @@ def main():
                         help="วัดค่าเซนเซอร์จริง หุ่นจะไม่ขยับ")
     parser.add_argument("--sim", action="store_true",
                         help="ทดสอบตรรกะสำรวจ โดยไม่ต้องต่อหุ่น")
+    parser.add_argument("--goto", metavar="X,Y", default=None,
+                        help="ไม่สำรวจใหม่ - โหลดแผนที่เก่า (--map-file) แล้วเดินไปช่องนี้")
+    parser.add_argument("--return-start", action="store_true",
+                        help="เหมือน --goto แต่ไปที่ START_CELL ของแผนที่ที่โหลดมา")
+    parser.add_argument("--map-file", default=None,
+                        help="ไฟล์ {0}_state_*.json ที่จะโหลด (ไม่ระบุ = เอาไฟล์ล่าสุดในโฟลเดอร์นี้)"
+                            .format(LOG_PREFIX))
     parser.add_argument("--conn", default=CONN_TYPE,
                         choices=["ap", "sta", "rndis"],
                         help="วิธีเชื่อมต่อหุ่น (ค่าเริ่มต้น {0})".format(CONN_TYPE))
     args = parser.parse_args()
 
-    if args.sim:
-        return 0 if run_sim() else 1
+    # เปิดไฟล์ log ข้อความ (ทุกอย่างที่ print() ตั้งแต่บรรทัดนี้เป็นต้นไปจะถูก
+    # เขียนซ้ำลงไฟล์นี้ด้วย real-time ไม่ต้องรอ export_run ตอนจบ) - ถ้าโปรแกรม
+    # ถูก kill กลางทาง (Ctrl+C ค้าง/แครช) จะยังมีไฟล์นี้อยู่ครบถึงบรรทัดสุดท้าย
+    # ที่พิมพ์จริง ต่างจาก CSV/map ที่เขียนแค่ตอนจบแบบปกติเท่านั้น
+    ts = _timestamp()
+    log_path = _log_path("{0}_run_{1}.log".format(LOG_PREFIX, ts))
+    log_file = open(log_path, "w", encoding="utf-8")
+    real_stdout = sys.stdout
+    sys.stdout = _Tee(real_stdout, log_file)
+    print("[LOG] ข้อความทั้งหมดตั้งแต่บรรทัดนี้จะถูกบันทึกไว้ที่ {0} ด้วย (real-time)"
+          .format(log_path))
 
-    if robot is None:
-        print("[ERROR] import robomaster ไม่สำเร็จ: {0}".format(ROBOT_IMPORT_ERROR))
-        print("        ติดตั้ง SDK ก่อน หรือใช้ --sim เพื่อทดสอบเฉพาะตรรกะ")
-        return 1
-
-    if not args.calib:
-        require_calibration()
-
-    ep_robot = robot.Robot()
-    print("กำลังเชื่อมต่อหุ่นแบบ {0} ...".format(args.conn))
-    ep_robot.initialize(conn_type=args.conn)
-
-    # ToF ติดอยู่บน gimbal ไม่ใช่ยึดตายกับแชสซี ต้อง recenter ค้างไว้ตั้งแต่ต้น
-    # แล้วห้ามสั่งขยับ gimbal อีกเลยตลอดภารกิจ ไม่งั้นค่า "หน้า" จาก
-    # sensor.sub_distance() จะไม่ตรงกับทิศหัวรถจริงแบบไม่มี error เตือน
-    print("กำลัง recenter gimbal ...")
-    ep_robot.gimbal.recenter().wait_for_completed()
-
-    hub = SensorHub(ep_robot)
-    success = False
     try:
-        hub.start()
-        if args.calib:
-            run_calibration(hub)
-            success = True
-        else:
-            # initialize() ตั้ง FREE ให้อยู่แล้ว (robot.py reset) แต่สั่งซ้ำให้ชัดเจน
-            # ว่าโค้ดนี้ต้องการให้แชสซีขยับอิสระจากกิมบอล
-            ep_robot.set_robot_mode(robot.FREE)
-            time.sleep(0.5)
+        if args.sim:
+            return 0 if run_sim() else 1
 
-            driver = Driver(ep_robot.chassis, hub)
-            driver.calibrate_yaw_sign()
-            driver.set_north_reference(START_HEADING)
+        if robot is None:
+            print("[ERROR] import robomaster ไม่สำเร็จ: {0}".format(ROBOT_IMPORT_ERROR))
+            print("        ติดตั้ง SDK ก่อน หรือใช้ --sim เพื่อทดสอบเฉพาะตรรกะ")
+            return 1
 
-            success = run_explore(hub, driver)
-    except KeyboardInterrupt:
-        print("\n[STOP] ผู้ใช้สั่งหยุด")
+        goto_mode = args.goto is not None or args.return_start
+        if not args.calib:
+            require_calibration()
+
+        ep_robot = robot.Robot()
+        print("กำลังเชื่อมต่อหุ่นแบบ {0} ...".format(args.conn))
+        ep_robot.initialize(conn_type=args.conn)
+
+        # ToF ติดอยู่บน gimbal - recenter ให้ชี้หน้าตรงตั้งแต่ต้น เป็นจุดอ้างอิง
+        # 0 องศาของ point_gimbal() ทุกครั้งต่อจากนี้ (ต่างจากเวอร์ชันแรก เวอร์ชันนี้
+        # จะสั่งหมุน gimbal จริงระหว่างภารกิจ เพื่อสแกน ToF 4 ทิศทุกช่อง)
+        print("กำลัง recenter gimbal ...")
+        ep_robot.gimbal.recenter().wait_for_completed()
+
+        hub = SensorHub(ep_robot)
+        success = False
+        try:
+            hub.start()
+            sensorlog_path = _log_path("{0}_sensorlog_{1}.csv".format(LOG_PREFIX, ts))
+            hub.attach_sensor_log(sensorlog_path)
+            if args.calib:
+                run_calibration(hub)
+                success = True
+            else:
+                # initialize() ตั้ง FREE ให้อยู่แล้ว (robot.py reset) แต่สั่งซ้ำให้ชัดเจน
+                # ว่าโค้ดนี้ต้องการให้แชสซีขยับอิสระจากกิมบอล
+                ep_robot.set_robot_mode(robot.FREE)
+                time.sleep(0.5)
+
+                print("กำลังหา gimbal_yaw_sign ...")
+                hub.calibrate_gimbal_yaw_sign()
+
+                driver = Driver(ep_robot.chassis, hub)
+
+                if goto_mode:
+                    map_path = args.map_file or find_latest_state_file()
+                    if map_path is None:
+                        print("[ERROR] ไม่พบไฟล์ {0}_state_*.json ในโฟลเดอร์นี้ - ต้องสำรวจ "
+                              "(รันแบบปกติไม่ใส่ --goto/--return-start) ให้จบอย่างน้อยหนึ่ง "
+                              "ครั้งก่อน ถึงจะมีแผนที่ให้โหมดนี้ใช้".format(LOG_PREFIX))
+                    else:
+                        print("[GOTO] โหลดแผนที่จาก {0}".format(map_path))
+                        state = load_state(map_path)
+                        try:
+                            target = (state["start_cell"] if args.return_start
+                                      else _parse_cell(args.goto))
+                        except ValueError as exc:
+                            print("[ERROR] --goto {0}".format(exc))
+                            target = None
+                        if target is not None:
+                            cur_cell, cur_heading = _prompt_current_pose(
+                                state["end_cell"], state["end_heading"])
+                            ok, _, _, _ = run_goto(hub, driver, state["maze"],
+                                                   cur_cell[0], cur_cell[1],
+                                                   cur_heading, target)
+                            success = ok
+                else:
+                    done, maze, x, y, heading = run_explore(hub, driver)
+                    success = done
+                    # สำรวจครบแล้ว - สั่งต่อได้ทันทีในการเชื่อมต่อเดียวกันเลย โดยไม่
+                    # ต้องโหลดไฟล์ใหม่ (ตำแหน่ง/แผนที่ยัง live อยู่ในหน่วยความจำ)
+                    while done:
+                        cmd = input(
+                            "\n[NEXT] สำรวจครบแล้ว อยู่ช่อง {0} หัน {1}\n"
+                            "      พิมพ์ 'start' กลับจุดเริ่มต้น, พิมพ์ 'x,y' ไปช่องนั้น, "
+                            "หรือ Enter จบงาน: ".format((x, y), DIR_NAMES[heading])).strip()
+                        if not cmd:
+                            break
+                        try:
+                            target = START_CELL if cmd.lower() == "start" else _parse_cell(cmd)
+                        except ValueError as exc:
+                            print("[NEXT] {0}".format(exc))
+                            continue
+                        _, x, y, heading = run_goto(hub, driver, maze, x, y, heading, target)
+        except KeyboardInterrupt:
+            print("\n[STOP] ผู้ใช้สั่งหยุด")
+        finally:
+            try:
+                ep_robot.chassis.drive_speed(x=0, y=0, z=0)
+            except Exception as exc:                        # noqa: BLE001
+                print("[WARN] สั่งหยุดล้อไม่สำเร็จ: {0}".format(exc))
+            hub.stop()
+            try:
+                ep_robot.close()
+            except Exception as exc:                        # noqa: BLE001
+                print("[WARN] ปิดการเชื่อมต่อไม่สำเร็จ: {0}".format(exc))
+
     finally:
+        sys.stdout = real_stdout
         try:
-            ep_robot.chassis.drive_speed(x=0, y=0, z=0)
-        except Exception as exc:                        # noqa: BLE001
-            print("[WARN] สั่งหยุดล้อไม่สำเร็จ: {0}".format(exc))
-        hub.stop()
-        try:
-            ep_robot.close()
-        except Exception as exc:                        # noqa: BLE001
-            print("[WARN] ปิดการเชื่อมต่อไม่สำเร็จ: {0}".format(exc))
+            log_file.close()
+        except Exception:
+            pass
 
     return 0 if success else 1
 

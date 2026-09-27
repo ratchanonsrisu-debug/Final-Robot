@@ -1,0 +1,11 @@
+{
+ "total_cells": 20,
+ "visited_cells": 20,
+ "coverage_pct": 100.0,
+ "correct_cells": 20,
+ "map_accuracy_pct": 100.0,
+ "edge_accuracy_pct": 100.0,
+ "gt_walls": 29,
+ "detected_walls": 29,
+ "walls_matched": 29
+}

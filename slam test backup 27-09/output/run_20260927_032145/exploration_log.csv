@@ -1,0 +1,4 @@
+step,time_s,event,cell_x,cell_y,heading,est_x_m,est_y_m,odom_x_m,odom_y_m,yaw_deg,tof_N,tof_E,tof_S,tof_W,walls_NESW,note
+0,12.45,scan,0,0,N,0.3,0.3,-0.0,-0.003,4.3,2719,123,211,1530,.WW.,
+1,12.45,measured_pose,0,0,N,0.341,0.347,-0.0,-0.003,4.3,,,,,,
+2,13.19,recenter,0,0,N,0.3,0.3,-0.036,0.018,4.3,,,,,,

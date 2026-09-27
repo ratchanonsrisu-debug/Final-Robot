@@ -1,0 +1,2 @@
+matplotlib
+robomaster   # เฉพาะตอนใช้หุ่นจริง (Python 3.7-3.8)

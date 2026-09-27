@@ -2,14 +2,18 @@
 """
 testsen.py -- เช็คเซนเซอร์ที่ต่อกับ RoboMaster EP แบบเรียลไทม์
 
-ฮาร์ดแวร์:
-  - Sharp (analog IR distance) x2  -> sensor_adaptor.get_adc(id, port)
-  - IR digital obstacle sensor x2  -> sensor_adaptor.get_io(id, port)
-    (รวม 4 พอร์ตบน sensor adaptor บอร์ด)
-  - ToF distance module            -> ติดอยู่บน gimbal, อ่านผ่าน ep_robot.sensor.sub_distance()
+ฮาร์ดแวร์ (ตรงกับที่ใช้จริงใน Classwork8/SLAM.py ล่าสุด):
+  - Sharp ซ้าย   -> hub 3 port 1 (ADC) - จัดกึ่งกลางตอนจอดเท่านั้น
+  - Sharp ขวา    -> hub 2 port 2 (ADC) - จัดกึ่งกลางตอนจอดเท่านั้น
+  - IR 45 องศา ซ้าย-หน้า -> hub 1 port 1 (IO) - e-stop ตอนเดินหน้าเท่านั้น
+  - IR 45 องศา ขวา       -> hub 2 port 1 (IO) - e-stop ตอนเดินหน้าเท่านั้น
+  - ToF distance module  -> ติดอยู่บน gimbal, อ่านผ่าน ep_robot.sensor.sub_distance()
 
-แก้ id/port/type ใน SENSOR_PORTS ด้านล่างให้ตรงกับการต่อสายจริงของหุ่นตัวนี้
-(ถ้าไม่แน่ใจว่า id/port ไหนตอบสนองจริง ให้ไล่ค่าดูจาก terminal ตอนบัง/ปล่อยเซนเซอร์แต่ละตัว)
+แก้ id/port/type ใน SENSOR_PORTS ด้านล่างให้ตรงกับการต่อสายจริงของหุ่นตัวนี้ ถ้า
+ย้ายสายอีกให้แก้ตรงนี้พร้อมกับ CONFIG ใน ``Classwork8/SLAM.py`` ด้วย (คนละไฟล์
+กัน ไม่ได้ import ค่ากันเอง)
+(ถ้าไม่แน่ใจว่า id/port ไหนตอบสนองจริง ให้ไล่ค่าดูจาก terminal ตอนบัง/ปล่อยเซนเซอร์แต่ละตัว
+หรือรันด้วย --scan)
 
 การใช้งาน:
     python testsen.py                  # conn_type=ap (ต่อ WiFi ตรงหุ่น), รีเฟรชทุก 0.2s
@@ -29,10 +33,10 @@ from robomaster import robot
 #         "ir"    -> digital, อ่านด้วย get_io  (ค่า 0/1)
 # ----------------------------------------------------------------------------
 SENSOR_PORTS = [
-    {"id": 1, "port": 1, "type": "sharp", "label": "Sharp-FrontLeft"},
-    {"id": 1, "port": 2, "type": "ir",    "label": "IR45-FrontLeft"},
-    {"id": 2, "port": 1, "type": "ir",    "label": "IR-FrontRight"},
-    {"id": 3, "port": 1, "type": "sharp", "label": "Sharp-RearLeft"},
+    {"id": 1, "port": 1, "type": "ir",    "label": "IR45-Left"},   # ทแยงซ้าย-หน้า 45 องศา
+    {"id": 2, "port": 1, "type": "ir",    "label": "IR45-Right"},  # ทแยงขวา 45 องศา
+    {"id": 3, "port": 1, "type": "sharp", "label": "Sharp-Left"},  # Sharp ซ้าย (จัดกึ่งกลางตอนจอด)
+    {"id": 2, "port": 2, "type": "sharp", "label": "Sharp-Right"}, # Sharp ขวา (จัดกึ่งกลางตอนจอด)
 ]
 
 
