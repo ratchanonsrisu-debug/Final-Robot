@@ -165,3 +165,4 @@ ASCII map ( | --- = wall, ? = unknown, . = visited ):
 | . |   | .   . | . |
 +---+---+---+---+---+
 ไฟล์ทั้งหมดอยู่ที่: d:\ROBOT-Final\Final-Robot\slam test\output\run_20260927_212454
+[robot] กำลังเชื่อมต่อ RoboMaster (AP mode) ...
