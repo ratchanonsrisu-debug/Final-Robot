@@ -1,0 +1,62 @@
+[robot] กำลังเชื่อมต่อ RoboMaster (AP mode) ...
+[gimbal] yaw sign = +1 (สั่ง moveto(yaw=+30) -> มุมเปลี่ยนจริง +30.4°)
+[robot] เชื่อมต่อสำเร็จ พร้อมใช้งาน
+[REAL] เชื่อมต่อหุ่นจริงสำเร็จ: 4x5, เริ่ม (0,0) หัน N
+log -> d:\ROBOT-Final\Final-Robot\slam test\output\run_20260927_020505
+--- CALIBRATE ---
+ToF N,E,S,W = N:2794, E:136, S:163, W:2081
+ตั้ง WALL_EXPECT_MM=150, WALL_THRESHOLD_MM=420 (ใช้ในรอบนี้ — ถ้าจะใช้ถาวรให้แก้ใน config.py)
+--- CALIBRATE ---
+ToF N,E,S,W = N:2784, E:137, S:163, W:2082
+ตั้ง WALL_EXPECT_MM=150, WALL_THRESHOLD_MM=420 (ใช้ในรอบนี้ — ถ้าจะใช้ถาวรให้แก้ใน config.py)
+--- EXPLORE ---
+[start] START cell=(0, 0) heading=N
+frontier -> (0, 1)  path=N
+[chassis] เดินไปทิศ N ไม่ยืนยันว่าสำเร็จ (timeout/ถูกบล็อก) - ตำแหน่งที่บันทึกไว้อาจไม่ตรงกับจริง (explorer จะตรวจซ้ำด้วย ToF)
+frontier -> (0, 2)  path=N
+frontier -> (0, 3)  path=N
+frontier -> (0, 4)  path=N
+recheck wall at (0, 4) toward E
+[goto] GOTO (0, 4) from (0, 4)
+[arrived] ARRIVED at (0, 4)
+[recheck] recheck (0, 4)->E: 0/3 open -> WALL
+recheck wall at (0, 3) toward E
+[goto] GOTO (0, 3) from (0, 4)
+[arrived] ARRIVED at (0, 3)
+[recheck] recheck (0, 3)->E: 0/3 open -> WALL
+recheck wall at (0, 2) toward E
+[goto] GOTO (0, 2) from (0, 3)
+[arrived] ARRIVED at (0, 2)
+[recheck] recheck (0, 2)->E: 0/3 open -> WALL
+recheck wall at (0, 1) toward E
+[goto] GOTO (0, 1) from (0, 2)
+[scan] LOCALIZATION WARNING: 2 walls differ from map. matching cells=[(2, 0), (2, 1), (2, 2), (2, 3), (3, 0)]
+[arrived] ARRIVED at (0, 1)
+[recheck] recheck (0, 1)->E: 0/3 open -> WALL
+recheck wall at (0, 0) toward E
+[goto] GOTO (0, 0) from (0, 1)
+[blocked] wall detected toward S (409mm) -> replan
+[goto_fail] no path to (0, 0) in current map
+[end] END cell=(0, 1)  visited 5/20
+สำรวจเสร็จ: 5/20 ช่อง  เริ่ม [0, 0, 'N']  จบ [0, 1, 'S']
+===== Class Work 8 : SLAM - Explore the Unknown World =====
+Grid           : 4 x 5  (cell 0.60 m)
+Start          : cell (0, 0)  heading N
+End            : cell (0, 1)
+Visited cells  : 5 / 20
+Coverage       : 25.0 %
+Map Accuracy   : (no ground truth yet — enter it in the GUI and press Evaluate)
+
+ASCII map ( | --- = wall, ? = unknown, . = visited ):
++---+---+---+---+
+| . |   ?   ?   |
++   + ? + ? + ? +
+| . |   ?   ?   |
++   + ? + ? + ? +
+| . |   ?   ?   |
++   + ? + ? + ? +
+| . |   ?   ?   |
++---+ ? + ? + ? +
+| . |   ?   ?   |
++---+---+---+---+
+ไฟล์ทั้งหมดอยู่ที่: d:\ROBOT-Final\Final-Robot\slam test\output\run_20260927_020505

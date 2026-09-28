@@ -1,0 +1,9 @@
+[robot] กำลังเชื่อมต่อ RoboMaster (AP mode) ...
+[gimbal] yaw sign = +1 (รอบ 1/3: สั่ง moveto(yaw=+30) -> มุมเปลี่ยนจริง +30.3°)
+[robot] เชื่อมต่อสำเร็จ พร้อมใช้งาน
+[REAL] เชื่อมต่อหุ่นจริงสำเร็จ: 4x5, เริ่ม (0,0) หัน N
+log -> d:\ROBOT-Final\Final-Robot\slam test\output\run_20260927_032145
+--- CALIBRATE ---
+ToF N,E,S,W = N:2726, E:115, S:214, W:1535
+ตั้ง WALL_EXPECT_MM=164, WALL_THRESHOLD_MM=434 (ใช้ในรอบนี้ — ถ้าจะใช้ถาวรให้แก้ใน config.py)
+--- SCAN ---

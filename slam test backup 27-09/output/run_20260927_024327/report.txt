@@ -1,0 +1,20 @@
+===== Class Work 8 : SLAM - Explore the Unknown World =====
+Grid           : 4 x 5  (cell 0.60 m)
+Start          : cell (0, 0)  heading N
+End            : cell (0, 3)
+Visited cells  : 4 / 20
+Coverage       : 20.0 %
+Map Accuracy   : (no ground truth yet — enter it in the GUI and press Evaluate)
+
+ASCII map ( | --- = wall, ? = unknown, . = visited ):
++---+---+---+---+
+|   ?   ?   ?   |
++   + ? + ? + ? +
+| . |   ?   ?   |
++   + ? + ? + ? +
+| . |   ?   ?   |
++   + ? + ? + ? +
+| . |   ?   ?   |
++   + ? + ? + ? +
+| . |   ?   ?   |
++---+---+---+---+

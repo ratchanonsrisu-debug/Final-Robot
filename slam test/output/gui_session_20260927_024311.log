@@ -1,0 +1,39 @@
+[robot] กำลังเชื่อมต่อ RoboMaster (AP mode) ...
+[gimbal] yaw sign = +1 (รอบ 1/3: สั่ง moveto(yaw=+30) -> มุมเปลี่ยนจริง +30.1°)
+[robot] เชื่อมต่อสำเร็จ พร้อมใช้งาน
+[REAL] เชื่อมต่อหุ่นจริงสำเร็จ: 4x5, เริ่ม (0,0) หัน N
+log -> d:\ROBOT-Final\Final-Robot\slam test\output\run_20260927_024327
+--- CALIBRATE ---
+ToF N,E,S,W = N:2715, E:173, S:205, W:2046
+ตั้ง WALL_EXPECT_MM=189, WALL_THRESHOLD_MM=459 (ใช้ในรอบนี้ — ถ้าจะใช้ถาวรให้แก้ใน config.py)
+--- SCAN ---
+--- EXPLORE ---
+[start] START cell=(0, 0) heading=N
+frontier -> (0, 1)  path=N
+[chassis] เดินไปทิศ N ไม่ยืนยันว่าสำเร็จ (timeout/ถูกบล็อก) - ตำแหน่งที่บันทึกไว้อาจไม่ตรงกับจริง (explorer จะตรวจซ้ำด้วย ToF)
+frontier -> (0, 2)  path=N
+frontier -> (0, 3)  path=N
+STOP requested (หุ่นจะหยุดหลังจบก้าวปัจจุบัน)
+[end] END cell=(0, 3)  visited 4/20
+สำรวจเสร็จ: 4/20 ช่อง  เริ่ม [0, 0, 'N']  จบ [0, 3, 'N']
+===== Class Work 8 : SLAM - Explore the Unknown World =====
+Grid           : 4 x 5  (cell 0.60 m)
+Start          : cell (0, 0)  heading N
+End            : cell (0, 3)
+Visited cells  : 4 / 20
+Coverage       : 20.0 %
+Map Accuracy   : (no ground truth yet — enter it in the GUI and press Evaluate)
+
+ASCII map ( | --- = wall, ? = unknown, . = visited ):
++---+---+---+---+
+|   ?   ?   ?   |
++   + ? + ? + ? +
+| . |   ?   ?   |
++   + ? + ? + ? +
+| . |   ?   ?   |
++   + ? + ? + ? +
+| . |   ?   ?   |
++   + ? + ? + ? +
+| . |   ?   ?   |
++---+---+---+---+
+ไฟล์ทั้งหมดอยู่ที่: d:\ROBOT-Final\Final-Robot\slam test\output\run_20260927_024327

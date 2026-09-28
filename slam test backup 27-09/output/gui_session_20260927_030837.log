@@ -1,0 +1,24 @@
+[robot] กำลังเชื่อมต่อ RoboMaster (AP mode) ...
+[robot] กำลังเชื่อมต่อ RoboMaster (AP mode) ...
+[gimbal] yaw sign = +1 (รอบ 1/3: สั่ง moveto(yaw=+30) -> มุมเปลี่ยนจริง +30.2°)
+เชื่อมต่อไม่สำเร็จ: TypeError('exceptions must derive from BaseException')
+ตรวจ: ต่อ Wi-Fi ของหุ่น (AP mode), pip install robomaster, Python 3.6-3.8
+[robot] เชื่อมต่อสำเร็จ พร้อมใช้งาน
+[REAL] เชื่อมต่อหุ่นจริงสำเร็จ: 4x5, เริ่ม (0,0) หัน N
+log -> d:\ROBOT-Final\Final-Robot\slam test\output\run_20260927_030902
+--- CALIBRATE ---
+ToF N,E,S,W = N:2702, E:180, S:166, W:2037
+ตั้ง WALL_EXPECT_MM=173, WALL_THRESHOLD_MM=443 (ใช้ในรอบนี้ — ถ้าจะใช้ถาวรให้แก้ใน config.py)
+--- SCAN ---
+--- SCAN ---
+--- SCAN ---
+--- SCAN ---
+[robot] กำลังเชื่อมต่อ RoboMaster (AP mode) ...
+[gimbal] yaw sign = +1 (รอบ 1/3: สั่ง moveto(yaw=+30) -> มุมเปลี่ยนจริง +30.3°)
+[robot] เชื่อมต่อสำเร็จ พร้อมใช้งาน
+[REAL] เชื่อมต่อหุ่นจริงสำเร็จ: 4x5, เริ่ม (0,0) หัน N
+log -> d:\ROBOT-Final\Final-Robot\slam test\output\run_20260927_031132
+--- CALIBRATE ---
+ToF N,E,S,W = N:2712, E:176, S:162, W:2037
+ตั้ง WALL_EXPECT_MM=169, WALL_THRESHOLD_MM=439 (ใช้ในรอบนี้ — ถ้าจะใช้ถาวรให้แก้ใน config.py)
+--- SCAN ---

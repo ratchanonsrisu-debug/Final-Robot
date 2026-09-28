@@ -1,0 +1,4 @@
+[build] โฟลเดอร์: d:\ROBOT-Final\Final-Robot\slam test
+[build] แก้ล่าสุด: config.py 27/09 20:58:42, robots.py 27/09 20:58:42, explorer.py 27/09 21:02:23, gui.py 27/09 21:00:43
+[build] YAW_SIGN=-1 GIMBAL_RIGHT_YAW=90 WALL_EXPECT=184 THRESH=424 USE_SHARP=True MOVE_FACTOR=1.05/1.12
+STOP requested (หุ่นจะหยุดหลังจบก้าวปัจจุบัน)

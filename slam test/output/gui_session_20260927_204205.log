@@ -1,0 +1,100 @@
+[build] โฟลเดอร์: d:\ROBOT-Final\Final-Robot\slam test
+[build] แก้ล่าสุด: config.py 27/09 20:37:30, robots.py 27/09 20:36:47, explorer.py 27/09 20:37:16, gui.py 27/09 20:37:07
+[build] YAW_SIGN=-1 GIMBAL_RIGHT_YAW=90 WALL_EXPECT=184 THRESH=424 USE_SHARP=True MOVE_FACTOR=1.05/1.12
+[robot] กำลังเชื่อมต่อ RoboMaster (AP mode) ...
+[gimbal] yaw sign = +1 (รอบ 1/3: สั่ง moveto(yaw=+30) -> มุมเปลี่ยนจริง +30.3°)
+[robot] เชื่อมต่อสำเร็จ พร้อมใช้งาน
+[REAL] เชื่อมต่อหุ่นจริงสำเร็จ: 4x5, เริ่ม (0,0) หัน N
+STOP requested (หุ่นจะหยุดหลังจบก้าวปัจจุบัน)
+[robot] กำลังเชื่อมต่อ RoboMaster (AP mode) ...
+[gimbal] yaw sign = +1 (รอบ 1/3: สั่ง moveto(yaw=+30) -> มุมเปลี่ยนจริง +30.3°)
+[robot] เชื่อมต่อสำเร็จ พร้อมใช้งาน
+[REAL] เชื่อมต่อหุ่นจริงสำเร็จ: 5x4, เริ่ม (0,0) หัน N
+log -> d:\ROBOT-Final\Final-Robot\slam test\output\run_20260927_204607
+--- CALIBRATE ---
+[CALIBRATE] N: [1408, 1410, 1410, 1410, 1410, 1410, 1410]mm -> median=1410mm (ต่ำสุด-สูงสุด 1408-1410mm)
+[CALIBRATE] E: [238, 238, 238, 238, 238, 237, 237]mm -> median=238mm (ต่ำสุด-สูงสุด 237-238mm)
+[CALIBRATE] S: [237, 237, 238, 238, 238, 237, 237]mm -> median=237mm (ต่ำสุด-สูงสุด 237-238mm)
+[CALIBRATE] W: [201, 201, 201, 201, 199, 199, 199]mm -> median=201mm (ต่ำสุด-สูงสุด 199-201mm)
+ตั้ง WALL_EXPECT_MM=226, WALL_THRESHOLD_MM=466 (mm จริง, ใช้ในรอบนี้ — ถ้าจะใช้ถาวรให้แก้ใน config.py)
+[CALIBRATE] Sharp R (E) = 197mm -> ตั้ง SHARP_R_EXPECT_MM=197
+[CALIBRATE] Sharp L (W) = 148mm -> ตั้ง SHARP_L_EXPECT_MM=148
+--- SCAN ---
+--- EXPLORE ---
+[start] START cell=(0, 0) heading=N
+frontier -> (0, 1)  path=N
+[topup] เดิน N ขาด 142mm -> เติม 142mm
+[topup] เดิน N ขาด 32mm -> เติม 32mm
+[measured_pose] offset from centre dx=83mm dy=-0mm
+frontier -> (0, 2)  path=N
+STOP requested (หุ่นจะหยุดหลังจบก้าวปัจจุบัน)
+[topup] เดิน N ขาด 211mm -> เติม 200mm
+[topup] เดิน N ขาด 2774mm -> เติม 200mm
+[gimbal] สั่งไป yaw=180 แต่มุมจริงยังไม่นิ่ง (อ่านได้ 120.7°) - จะอ่าน ToF ต่อไปเลย ค่าที่ได้อาจไม่แม่น
+[scan] W: ToF 375mm=W vs Sharp 999mm=. -> ใช้ Sharp; !! W เป็นขอบสนามแต่อ่านโล่ง 467mm (เช็ค GIMBAL_RIGHT_YAW)
+STOP requested (หุ่นจะหยุดหลังจบก้าวปัจจุบัน)
+[measured_pose] offset from centre dx=-32mm dy=107mm
+[end] END cell=(0, 2)  visited 3/20
+สำรวจเสร็จ: 3/20 ช่อง  เริ่ม [0, 0, 'N']  จบ [0, 2, 'N']
+===== Class Work 8 : SLAM - Explore the Unknown World =====
+Grid           : 5 x 4  (cell 0.60 m)
+Start          : cell (0, 0)  heading N
+End            : cell (0, 2)
+Visited cells  : 3 / 20
+Coverage       : 15.0 %
+Map Accuracy   : (no ground truth yet — enter it in the GUI and press Evaluate)
+
+ASCII map ( | --- = wall, ? = unknown, . = visited ):
++---+---+---+---+---+
+|   ?   ?   ?   ?   |
++   + ? + ? + ? + ? +
+| . |   ?   ?   ?   |
++ ? + ? + ? + ? + ? +
+| . |   ?   ?   ?   |
++   + ? + ? + ? + ? +
+| . |   ?   ?   ?   |
++---+---+---+---+---+
+ไฟล์ทั้งหมดอยู่ที่: d:\ROBOT-Final\Final-Robot\slam test\output\run_20260927_204607
+[robot] กำลังเชื่อมต่อ RoboMaster (AP mode) ...
+[gimbal] yaw sign = +1 (รอบ 1/3: สั่ง moveto(yaw=+30) -> มุมเปลี่ยนจริง +30.4°)
+[robot] เชื่อมต่อสำเร็จ พร้อมใช้งาน
+[REAL] เชื่อมต่อหุ่นจริงสำเร็จ: 5x4, เริ่ม (0,0) หัน N
+log -> d:\ROBOT-Final\Final-Robot\slam test\output\run_20260927_204745
+--- EXPLORE ---
+[start] START cell=(0, 0) heading=N
+frontier -> (0, 1)  path=N
+frontier -> (0, 2)  path=N
+[measured_pose] offset from centre dx=69mm dy=-13mm
+frontier -> (1, 2)  path=E
+[no_progress] เดินไป E แล้วระยะแทบไม่เปลี่ยน (ก่อน 774mm หลัง 1326mm) - น่าจะล้อลื่น/สั่นอยู่กับที่ ไม่นับว่าผ่าน
+[scan] E: ToF 1330mm=. vs Sharp 237mm=W -> ใช้ Sharp; W: ToF 1368mm=. vs Sharp 210mm=W -> ใช้ Sharp
+recheck wall at (0, 2) toward N
+[goto] GOTO (0, 2) from (0, 2)
+[arrived] ARRIVED at (0, 2)
+[recheck] recheck (0, 2)->N: 3/3 open -> OPEN
+frontier -> (0, 3)  path=N
+[no_progress] เดินไป N แล้วระยะแทบไม่เปลี่ยน (ก่อน 1770mm หลัง 3000mm) - น่าจะล้อลื่น/สั่นอยู่กับที่ ไม่นับว่าผ่าน
+STOP requested (หุ่นจะหยุดหลังจบก้าวปัจจุบัน)
+[scan] E: ToF 1945mm=. vs Sharp 237mm=W -> ใช้ Sharp; W: ToF 1941mm=. vs Sharp 197mm=W -> ใช้ Sharp
+[end] END cell=(0, 2)  visited 3/20
+สำรวจเสร็จ: 3/20 ช่อง  เริ่ม [0, 0, 'N']  จบ [0, 2, 'N']
+===== Class Work 8 : SLAM - Explore the Unknown World =====
+Grid           : 5 x 4  (cell 0.60 m)
+Start          : cell (0, 0)  heading N
+End            : cell (0, 2)
+Visited cells  : 3 / 20
+Coverage       : 15.0 %
+Map Accuracy   : (no ground truth yet — enter it in the GUI and press Evaluate)
+
+ASCII map ( | --- = wall, ? = unknown, . = visited ):
++---+---+---+---+---+
+|   ?   ?   ?   ?   |
++   + ? + ? + ? + ? +
+| . |   ?   ?   ?   |
++   + ? + ? + ? + ? +
+| . |   ?   ?   ?   |
++   + ? + ? + ? + ? +
+| . |   ?   ?   ?   |
++---+---+---+---+---+
+ไฟล์ทั้งหมดอยู่ที่: d:\ROBOT-Final\Final-Robot\slam test\output\run_20260927_204745
+STOP requested (หุ่นจะหยุดหลังจบก้าวปัจจุบัน)
