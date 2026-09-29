@@ -80,7 +80,10 @@ def main():
                    help="คำนวณ Accuracy/Coverage ย้อนหลังจากไฟล์ map.json ที่ export ไว้แล้ว")
     p.add_argument("--gt", metavar="GT_JSON", default=None,
                    help="ไฟล์ Ground Truth JSON คู่กับ --eval")
+    p.add_argument("--no-shooter", action="store_true", help="ปิดระบบการมองหาและยิงเป้าหมาย (เดินสำรวจอย่างเดียว)")
     args = p.parse_args()
+    if args.no_shooter:
+        C.ENABLE_SHOOTER = False
     print(C.build_info())
 
     if args.eval:

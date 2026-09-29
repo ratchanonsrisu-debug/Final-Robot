@@ -76,6 +76,9 @@ class App:
         self.v_mode = tk.StringVar(value="sim")
         self.v_seed = tk.StringVar(value="")
         self.v_move = tk.StringVar(value=C.MOVE_MODE)
+        self.v_color = tk.StringVar(value="red")
+        self.v_shape = tk.StringVar(value="rectangle")
+        self.v_shooter_enabled = tk.BooleanVar(value=getattr(C, "ENABLE_SHOOTER", True))
         rows = [("กว้าง (ช่อง)", ttk.Spinbox(f, from_=2, to=C.MAX_GRID, textvariable=self.v_w, width=5)),
                 ("สูง (ช่อง)", ttk.Spinbox(f, from_=2, to=C.MAX_GRID, textvariable=self.v_h, width=5)),
                 ("ขนาดช่อง (m)", ttk.Entry(f, textvariable=self.v_cell, width=7)),
@@ -83,7 +86,9 @@ class App:
                 ("เริ่ม y", ttk.Spinbox(f, from_=0, to=C.MAX_GRID - 1, textvariable=self.v_sy, width=5)),
                 ("หน้าหุ่นหันทิศ", ttk.Combobox(f, values=DIRS, textvariable=self.v_hd, width=4, state="readonly")),
                 ("การเดิน", ttk.Combobox(f, values=["strafe", "rotate"], textvariable=self.v_move, width=7, state="readonly")),
-                ("sim seed", ttk.Entry(f, textvariable=self.v_seed, width=7))]
+                ("sim seed", ttk.Entry(f, textvariable=self.v_seed, width=7)),
+                ("สีเป้าหมาย", ttk.Combobox(f, values=["red", "blue", "yellow", "green"], textvariable=self.v_color, width=7, state="readonly")),
+                ("ทรงเป้าหมาย", ttk.Combobox(f, values=["rectangle", "circle", "square"], textvariable=self.v_shape, width=7, state="readonly"))]
         for i, (lab, w) in enumerate(rows):          # 2 คู่ต่อแถว ให้หน้าจอไม่สูงเกิน
             r, c = divmod(i, 2)
             ttk.Label(f, text=lab).grid(row=r, column=2 * c, sticky="w", padx=(0 if c == 0 else 8, 2))
@@ -92,7 +97,8 @@ class App:
         mf = ttk.Frame(f)
         mf.grid(row=nr, column=0, columnspan=4, sticky="w", pady=3)
         ttk.Radiobutton(mf, text="จำลอง (Sim)", value="sim", variable=self.v_mode).pack(side=tk.LEFT)
-        ttk.Radiobutton(mf, text="หุ่นจริง", value="real", variable=self.v_mode).pack(side=tk.LEFT)
+        ttk.Radiobutton(mf, text="หุ่นจริง", value="real", variable=self.v_mode).pack(side=tk.LEFT, padx=(2, 6))
+        ttk.Checkbutton(mf, text="🎯 เปิดยิงเป้า", variable=self.v_shooter_enabled).pack(side=tk.LEFT)
         ttk.Button(f, text="Apply / เชื่อมต่อหุ่น", command=self.apply_settings).grid(
             row=nr + 1, column=0, columnspan=4, sticky="ew")
 
@@ -106,6 +112,10 @@ class App:
         ttk.Button(f2, text="ฉันอยู่ไหน?", command=self.where_am_i).grid(row=1, column=1, sticky="ew")
         ttk.Button(f2, text="กลับจุดเริ่มต้น", command=self.go_home).grid(row=2, column=0, sticky="ew")
         ttk.Button(f2, text="Calibrate ToF", command=self.calibrate).grid(row=2, column=1, sticky="ew")
+        ttk.Button(f2, text="🚀 Run 2 (วิ่งยิงเป้าด่วน)", command=self.start_run2).grid(
+            row=3, column=0, columnspan=2, sticky="ew", pady=(2, 2))
+        ttk.Button(f2, text="🎯 เทสการ Detect Target", command=self.open_detection_test).grid(
+            row=4, column=0, columnspan=2, sticky="ew", pady=(0, 0))
         f2.columnconfigure(0, weight=1); f2.columnconfigure(1, weight=1)
 
         # ---- click mode ----
@@ -219,7 +229,7 @@ class App:
         sx, sy = int(self.v_sx.get()), int(self.v_sy.get())
         if not (0 <= sx < w and 0 <= sy < h):
             raise ValueError("จุดเริ่มต้นอยู่นอกสนาม")
-        return w, h, float(self.v_cell.get()), sx, sy, self.v_hd.get()
+        return w, h, float(self.v_cell.get()), sx, sy, self.v_hd.get(), self.v_color.get(), self.v_shape.get()
 
     def _new_sim_world(self):
         seed = self.v_seed.get().strip()
@@ -230,10 +240,11 @@ class App:
         if self.busy():
             messagebox.showwarning("กำลังทำงาน", "กด Stop ก่อน"); return
         try:
-            w, h, cell, sx, sy, hd = self._read_settings()
+            w, h, cell, sx, sy, hd, color, shape = self._read_settings()
         except Exception as e:
             messagebox.showerror("ตั้งค่าผิด", str(e)); return
         C.MOVE_MODE = self.v_move.get()
+        C.ENABLE_SHOOTER = self.v_shooter_enabled.get()
         if self.robot:
             self.robot.close(); self.robot = None
         self.robot_kind = None    # ยังไม่มีหุ่นต่ออยู่ จนกว่าจะเชื่อมต่อสำเร็จด้านล่าง
@@ -263,10 +274,10 @@ class App:
             def conn():
                 try:
                     from robots import RealRobot
-                    r = RealRobot(sx, sy, hd, cell, log=self.log)
+                    r = RealRobot(sx, sy, hd, cell, log=self.log, color=color, shape=shape, enable_shooter=self.v_shooter_enabled.get())
                     self.robot = r
                     self.robot_kind = "real"
-                    self.log(f"[REAL] เชื่อมต่อหุ่นจริงสำเร็จ: {w}x{h}, เริ่ม ({sx},{sy}) หัน {hd}")
+                    self.log(f"[REAL] เชื่อมต่อหุ่นจริงสำเร็จ: {w}x{h}, เริ่ม ({sx},{sy}) หัน {hd} | Shooter: {'เปิด' if C.ENABLE_SHOOTER else 'ปิด'}")
                 except Exception as e:
                     self.robot = None
                     self.robot_kind = None
@@ -292,6 +303,15 @@ class App:
                 self.q.put(("click_goto", None))
                 self.log("จอดรอคำสั่ง: คลิกช่องบนแผนที่เพื่อสั่งหุ่นไป (แผนที่บันทึกแล้ว)")
         self.run_bg(job, "EXPLORE")
+
+    def start_run2(self):
+        if self.busy():
+            messagebox.showwarning("กำลังทำงาน", "กด Stop ก่อน"); return
+        def job():
+            shot_cnt, tot_cnt = self.explorer.run2_shoot_targets()
+            self.log(f"ภารกิจ Run 2 เสร็จสิ้น: ยิงสำเร็จ {shot_cnt}/{tot_cnt} เป้าหมาย")
+            self._export(auto=True)
+        self.run_bg(job, "RUN 2")
 
     def stop(self):
         self.stop_event.set()
@@ -367,6 +387,20 @@ class App:
                 self.log(f"[CALIBRATE] !! ToF ซ้าย/ขวาขัดกับ Sharp ทั้งสองฝั่ง = gimbal น่าจะหันสลับด้าน "
                          f"-> ลองตั้ง GIMBAL_RIGHT_YAW = {-C.GIMBAL_RIGHT_YAW} ใน config.py")
         self.run_bg(job, "CALIBRATE")
+
+    def open_detection_test(self):
+        import subprocess, sys
+        color = self.v_color.get()
+        shape = self.v_shape.get()
+        mode = self.v_mode.get()
+        cmd = [sys.executable, os.path.join(HERE, "test_detection.py"), "--color", color, "--shape", shape]
+        if mode == "sim":
+            cmd.append("--sim")
+        self.log(f"[Vision Test] เปิดหน้าต่างทดสอบการตรวจจับเป้าหมาย ({color} {shape})...")
+        try:
+            subprocess.Popen(cmd)
+        except Exception as e:
+            self.log(f"[Vision Test] ไม่สามารถเปิดระบบทดสอบได้: {e}")
 
     # ---------------------------------------------------------------- click
     def _geom(self):

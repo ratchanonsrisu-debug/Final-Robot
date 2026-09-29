@@ -48,6 +48,7 @@ class SimRobot:
         self.off = [0.0, 0.0]
         self._rnd = random.Random(seed)
         self._yaw = 0.0
+        self.shot_targets = set()
 
     # ---------- pose ----------
     def est_xy(self):
@@ -155,7 +156,7 @@ class RealRobot:
     #: มาจาก C.GIMBAL_RIGHT_YAW (เดิมเขียนตายตัว ขวา=-90 ซึ่งสลับด้านกับหุ่นจริง)
     _GIMBAL_REL_YAW = {0: 0, 1: C.GIMBAL_RIGHT_YAW, 2: 180, 3: -C.GIMBAL_RIGHT_YAW}
 
-    def __init__(self, sx, sy, heading, cell_m, log=print):
+    def __init__(self, sx, sy, heading, cell_m, log=print, color="red", shape="rectangle", enable_shooter=None):
         if robot is None:
             raise RuntimeError("ไม่พบไลบรารี robomaster (pip install robomaster)")
         self.log = log
@@ -180,6 +181,7 @@ class RealRobot:
         self._move_start = None  # odometry ตอนเริ่ม move_cell ล่าสุด (ใช้ undo_last_move)
         #: bool: True = อ่าน Sharp ไม่ได้ (สาย/พอร์ตผิด) -> ใช้ ToF อย่างเดียว
         self._sharp_off = False
+        self.shot_targets = set()  # บันทึกพิกัดช่องเป้าหมายที่ยิงสำเร็จแล้ว เช่น {(1, 2), (2, 3)}
 
         self.log("[robot] กำลังเชื่อมต่อ RoboMaster (AP mode) ...")
         self._ep = robot.Robot()
@@ -210,6 +212,19 @@ class RealRobot:
         self._pos0 = self._pos
         self._odom_h0 = self.body_heading
         self.log("[robot] เชื่อมต่อสำเร็จ พร้อมใช้งาน")
+        
+        # เพิ่มระบบ Shooter ทำงานเบื้องหลัง (ถ้าเปิดใช้งาน)
+        shooter_on = C.ENABLE_SHOOTER if enable_shooter is None else enable_shooter
+        self.shooter = None
+        if shooter_on:
+            try:
+                from vision_shooter import AutoShooter
+                self.shooter = AutoShooter(self._ep.camera, self._ep.gimbal, self._ep.blaster, color=color, shape=shape, ep_led=getattr(self._ep, 'led', None))
+                self.shooter.start()
+            except Exception as e:
+                self.log(f"[shooter] ไม่สามารถเปิดระบบ AutoShooter ได้: {e}")
+        else:
+            self.log("[shooter] ปิดระบบ AutoShooter (โหมดเดินสำรวจแผนที่ Pure SLAM)")
 
     # ---------- callbacks (เธรดของ DDS) ----------
     def _on_tof(self, info):
@@ -304,12 +319,20 @@ class RealRobot:
         ว่าไปถึงแล้วก่อนคืนค่า - ไม่เชื่อ wait_for_completed() เพียงอย่างเดียว เพราะเคยสงสัย
         ว่าค่า ToF ที่อ่านได้ "เร็ว/ผิดปกติ" อาจเกิดจากเริ่มอ่านตั้งแต่ gimbal ยังหมุนไม่หยุดจริง
         """
+        if hasattr(self, 'shooter'):
+            self.shooter.stop_aiming()
         try:
             self._ep.gimbal.moveto(pitch=pitch, yaw=yaw,
                                    yaw_speed=C.GIMBAL_YAW_SPEED).wait_for_completed(timeout=4.0)
         except Exception as e:                              # noqa: BLE001
-            self.log(f"[gimbal] moveto(yaw={yaw}) ล้มเหลว: {e}")
-            return
+            try:
+                self._ep.gimbal.drive_speed(pitch_speed=0, yaw_speed=0)
+                time.sleep(0.05)
+                self._ep.gimbal.moveto(pitch=pitch, yaw=yaw,
+                                       yaw_speed=C.GIMBAL_YAW_SPEED).wait_for_completed(timeout=3.0)
+            except Exception as e2:
+                self.log(f"[gimbal] moveto(yaw={yaw}) ล้มเหลว: {e2}")
+                return
         deadline = time.time() + extra_wait_s
         while time.time() < deadline:
             if abs(self._gimbal_yaw - yaw) <= tol_deg:
@@ -339,14 +362,82 @@ class RealRobot:
         read_dir() เพื่อให้ scan_all_detailed() เอาตัวอย่างดิบไปโชว์ได้โดยไม่ต้องสแกนซ้ำ"""
         yaw = self._gimbal_yaw_for(d)
         rel = (d - self.body_heading) % 4
-        pitch = C.GIMBAL_PITCH_SIDE if rel in (1, 3) else C.GIMBAL_PITCH
-        self._goto_gimbal(yaw, pitch)
+        # 1) อ่าน ToF ระดับสายตาขนานพื้น (0° / +5°) เพื่อไม่ให้ ToF ยิงลงพื้นจนอ่านเจอพื้นเป็นกำแพง
+        base_pitch = C.GIMBAL_PITCH_SIDE if rel in (1, 3) else C.GIMBAL_PITCH
+        self._goto_gimbal(yaw, base_pitch)
         time.sleep(C.TOF_SETTLE_S)
         samples = []
         for _ in range(C.TOF_SAMPLES):
             samples.append(self._interpret_tof(self._tof[C.TOF_INDEX]))
             time.sleep(0.03)
-        return float(statistics.median(samples)), samples
+            
+        med = float(statistics.median(samples))
+        
+        # 2) สแกนเช็คเป้าหมายระดับต่ำบนโฟมสนาม: ก้มกล้องลง -15° ให้เห็นเป้าต่ำในช่องได้อย่างทั่วถึง
+        if hasattr(self, 'shooter') and self.shooter is not None:
+            self._goto_gimbal(yaw, base_pitch - 15)
+            time.sleep(0.35)
+            fired = self._check_and_shoot_target(d, med)
+            if not fired:
+                # ถ้าไม่ได้ยิง คืนระดับกล้องกลับระดับสายตา
+                self._goto_gimbal(yaw, base_pitch)
+        
+        return med, samples
+
+    def _check_and_shoot_target(self, d, dist_mm):
+        """ตรวจสอบและยิงเป้าหมายทิศ d โดยยิงตรงจากช่องปัจจุบัน 100% ห้ามเคลื่อนตัวถังเด็ดขาด"""
+        if not hasattr(self, 'shooter') or self.shooter is None:
+            return False
+            
+        if not self.shooter.target_detected:
+            return False
+            
+        tx = self.cell[0] + DX[d]
+        ty = self.cell[1] + DY[d]
+        target_cell = (tx, ty)
+        
+        # ป้องกันการยิงซ้ำถ้าเคยมาร์กยิงแล้ว
+        if target_cell in self.shot_targets:
+            return False
+            
+        self.log(f"[shooter] 🎯 พบเป้าหมายใหม่ทิศ {DIRS[d]} (ช่องเป้าหมาย {target_cell}, ระยะ ToF {dist_mm:.0f} mm)")
+        
+        # สั่งยิงตรงจากช่องปัจจุบัน 100% (รักษาตำแหน่งกริด SLAM ไม่ให้เดินทะลุกระเบื้อง)
+        self.log(f"[shooter] 💥 สั่งยิงตรงจากช่องปัจจุบัน {self.cell} ทันที! (ไม่ขยับตัวถัง)")
+        fired = self.shooter.execute_shoot()
+            
+        if fired:
+            self.shot_targets.add(target_cell)
+            self.log(f"[shooter] ✅ ยิงสำเร็จ! มาร์กจุดยิงช่อง {target_cell} ลงแผนที่เรียบร้อย")
+            
+            # บันทึกข้อมูลเป้าหมายลงใน map.meta เพื่อให้รอบที่สอง (Run 2) เดินไปยิงตรงได้ทันทีโดยไม่ต้องสำรวจใหม่
+            if hasattr(self, 'explorer') and self.explorer and hasattr(self.explorer, 'm'):
+                if "targets" not in self.explorer.m.meta or not isinstance(self.explorer.m.meta.get("targets"), list):
+                    self.explorer.m.meta["targets"] = []
+                
+                already_recorded = any(t.get("cell") == list(target_cell) for t in self.explorer.m.meta["targets"])
+                if not already_recorded:
+                    _, _, shape, _, _, _ = self.shooter.vision_thread.get_target_info()
+                    color = self.shooter.vision_thread.target_color
+                    self.explorer.m.meta["targets"].append({
+                        "cell": list(target_cell),
+                        "standoff_cell": list(self.cell),
+                        "direction": d,
+                        "color": color,
+                        "shape": shape
+                    })
+                    self.log(f"[shooter] 📝 บันทึกเป้าหมาย {target_cell} ({color} {shape}) ลงใน Map Metadata เรียบร้อย")
+                    
+        return fired
+
+    def _approach_and_shoot(self, d, dist_mm):
+        """ยิงเป้าหมายตรงจากตำแหน่งช่องปัจจุบัน 100% โดยไม่เคลื่อนตัวถังขยับเข้าใกล้"""
+        if hasattr(self, 'shooter') and self.shooter is not None:
+            self.log(f"[shooter] 💥 ยิงตรงจากช่องปัจจุบัน {self.cell} ทิศ {DIRS[d]} (ไม่ขยับตัวถังเข้าใกล้)...")
+            return self.shooter.execute_shoot()
+        return False
+            
+        return fired
 
     def read_dir(self, d):
         median, _ = self._sample_dir(d)
@@ -557,6 +648,8 @@ class RealRobot:
 
     # ---------- lifecycle ----------
     def close(self):
+        if hasattr(self, 'shooter'):
+            self.shooter.stop()
         for fn in (self._ep.sensor.unsub_distance, self._ep.chassis.unsub_attitude,
                   self._ep.chassis.unsub_position, self._ep.gimbal.unsub_angle):
             try:

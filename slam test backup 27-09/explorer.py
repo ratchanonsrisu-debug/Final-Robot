@@ -68,6 +68,7 @@ class RunLogger:
 class Explorer:
     def __init__(self, robot, gmap, logger, on_update=None, stop_event=None, echo=print):
         self.r = robot
+        self.r.explorer = self
         self.m = gmap
         self.L = logger
         self.on_update = on_update or (lambda: None)
@@ -221,14 +222,11 @@ class Explorer:
             def plausible(d):
                 if not wall(d):
                     return False
-                if abs(tof[d] - E) < tol:
+                # ขยายช่วงยอมรับค่าเบี่ยง ToF กำแพงจริงได้สูงถึง 0.40 * cell_m (240mm) เพื่อขยับจัดกึ่งกลางและถอยออกจากกำแพงได้เสมอ
+                if abs(tof[d] - E) < 0.40 * self.m.cell_m * 1000:
                     return True
                 if tof[d] <= C.TOF_BLIND_ZONE_MM + 5:
-                    # ชิดจน ToF อ่านได้แค่ค่าต่ำสุด = ใกล้กว่าที่ควรอย่างน้อย E-60 แน่ๆ -> ต้องถอยออก
-                    # (log 28/9 01:47: (2,2) N=60 เกิน tol พอดีเลยไม่ถอย หุ่นจอดชิดกำแพงทั้งช่อง)
                     return True
-                # เยื้องเยอะเกิน tol แต่ odometry บอกตรงกัน = เยื้องจริง ไม่ใช่ค่าเพี้ยน
-                # (log 28/9: (4,0) S=429mm = เยื้อง 245mm ถูกทิ้งเพราะเกิน tol เลยไม่เคยแก้)
                 c1 = tof[d] - E if d == pos else -(tof[d] - E)
                 return (p is not None and abs(tof[d] - E) < 0.45 * self.m.cell_m * 1000
                         and abs(c1 - p) < C.ODOM_AGREE_MM)
@@ -576,6 +574,55 @@ class Explorer:
         self.r.face(hd)
         self.L.log(self.r, "parked", note=f"PARKED at {self.r.cell} heading={hd} - รอคำสั่ง")
         self.on_update()
+
+    def run2_shoot_targets(self):
+        """ภารกิจ Run 2: เดินตามแผนที่ที่บันทึกไว้ ตรงไปยิงเป้าหมายตามพิกัดใน meta['targets'] โดยไม่ต้องสแกนเขาวงกตใหม่"""
+        self.r.reset_heading_ref()
+        self.r.odo_ref = [None, None]
+        self.L.log(self.r, "run2_start", note="=== START RUN 2 (FAST TARGET STRIKE) ===")
+        
+        targets = self.m.meta.get("targets", [])
+        if not targets:
+            self.echo("[Run 2] ⚠️ ไม่พบพิกัดเป้าหมายในแผนที่ (meta['targets'] ว่างเปล่า) กรุณารัน Run 1 เพื่อสำรวจและยิงมาร์คจุดก่อน")
+            return 0, 0
+            
+        self.echo(f"[Run 2] 🚀 พบพิกัดเป้าหมายทั้งหมด {len(targets)} จุด เริ่มต้นภารกิจเดินยิงตรง...")
+        shot_count = 0
+        
+        for idx, tgt in enumerate(targets):
+            if self.stopped():
+                break
+            standoff = tuple(tgt["standoff_cell"])
+            target_cell = tuple(tgt["target_cell"])
+            direction = tgt["direction"]
+            
+            self.echo(f"[Run 2] 📍 เป้าหมายที่ {idx+1}/{len(targets)}: กำลังเดินทางไปยังจุดยิง {standoff} (ยิงช่อง {target_cell} ทิศ {DIRS[direction]})...")
+            
+            # เดินทางไปยังจุด standoff ด้วย A* โดยไม่สแกนขอบใหม่ (rescan=False)
+            success = self.go_to(standoff, rescan=False)
+            if not success:
+                self.echo(f"[Run 2] ❌ ไม่สามารถเดินทางไปยังจุดยิง {standoff} ได้ (ติดขัด/ไม่มีเส้นทาง)")
+                continue
+                
+            # หันตัวถังไปทิศทางเป้าหมาย
+            self.r.face(DIRS[direction])
+            time.sleep(0.4)
+            
+            # ยิงเป้าหมายตรงจากช่อง standoff ทันที (ไม่เคลื่อนตัวถังเข้าใกล้)
+            self.echo(f"[Run 2] 🎯 ถึงจุดยิงแล้ว! กำลังยิงเป้าหมายตรงจากช่องปัจจุบัน...")
+            fired = self.r.shooter.execute_shoot() if hasattr(self.r, 'shooter') and self.r.shooter else False
+            if fired:
+                shot_count += 1
+                self.echo(f"[Run 2] ✅ ยิงเป้าหมายจุดที่ {idx+1} สำเร็จ!")
+            else:
+                self.echo(f"[Run 2] ⚠️ ยิงเป้าหมายจุดที่ {idx+1} ไม่สำเร็จ")
+                
+        if C.RETURN_HOME and not self.stopped():
+            self.echo("[Run 2] 🏠 ยิงเป้าหมายครบถ้วนแล้ว กำลังกลับจุดเริ่มต้น...")
+            self.return_home()
+            
+        self.echo(f"[Run 2] 🏁 ภารกิจ Run 2 เสร็จสิ้น! ยิงสำเร็จ {shot_count}/{len(targets)} เป้าหมาย")
+        return shot_count, len(targets)
 
     def where_am_i(self):
         obs = self.sense(update_map=False, event="relocalize")
