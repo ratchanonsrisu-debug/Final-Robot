@@ -1,0 +1,214 @@
+{
+ "camera": {
+  "resolution": "720p",
+  "hfov_deg": 96.0
+ },
+ "colors": {
+  "RED": {
+   "ranges": [
+    [
+     [
+      0,
+      110,
+      70
+     ],
+     [
+      8,
+      255,
+      255
+     ]
+    ],
+    [
+     [
+      170,
+      110,
+      70
+     ],
+     [
+      180,
+      255,
+      255
+     ]
+    ]
+   ],
+   "draw": [
+    0,
+    0,
+    255
+   ]
+  },
+  "YELLOW": {
+   "ranges": [
+    [
+     [
+      20,
+      165,
+      140
+     ],
+     [
+      34,
+      255,
+      255
+     ]
+    ]
+   ],
+   "draw": [
+    0,
+    230,
+    255
+   ]
+  },
+  "GREEN": {
+   "ranges": [
+    [
+     [
+      40,
+      90,
+      50
+     ],
+     [
+      85,
+      255,
+      255
+     ]
+    ]
+   ],
+   "draw": [
+    0,
+    200,
+    0
+   ]
+  },
+  "BLUE": {
+   "ranges": [
+    [
+     [
+      95,
+      100,
+      50
+     ],
+     [
+      130,
+      255,
+      255
+     ]
+    ]
+   ],
+   "draw": [
+    255,
+    120,
+    0
+   ]
+  }
+ },
+ "vision": {
+  "clahe": true,
+  "glare_v_min": 225,
+  "glare_s_max": 70,
+  "glare_fill": true,
+  "min_area_px": 80,
+  "min_rectangularity": 0.78,
+  "circle_min_circularity": 0.8,
+  "dist_min_cm": 15,
+  "dist_max_cm": 320,
+  "size_consistency": 0.35,
+  "bg_ratio": 1.0
+ },
+ "roi": {
+  "x0": 0.0,
+  "y0": 0.0,
+  "x1": 1.0,
+  "y1": 1.0
+ },
+ "exclude": [],
+ "gimbal": {
+  "home_pitch": 0.0,
+  "home_yaw": 0.0,
+  "yaw_min": -120.0,
+  "yaw_max": 120.0,
+  "pitch_min": -20.0,
+  "pitch_max": 25.0,
+  "yaw_sign": 1,
+  "pitch_sign": 1,
+  "manual_speed": 40
+ },
+ "aim": {
+  "tolerance_deg": 0.35,
+  "max_iters": 8,
+  "gain": 0.9,
+  "settle_s": 0.35,
+  "aim_y_ratio": 0.5,
+  "confirm_frames": 2,
+  "ammo": "ir",
+  "confirm_hit_gel": true,
+  "max_triggers_gel": 8,
+  "confirm_hit_ir": false,
+  "max_triggers_ir": 1,
+  "confirm_wait_s": 0.8,
+  "confirm_knock_frames": 3
+ },
+ "calib_session": {
+  "duration_s": 15.0,
+  "interval_s": 0.3,
+  "z_cm": 0.0,
+  "expected": [
+   [
+    "RED",
+    "VERTICAL"
+   ],
+   [
+    "YELLOW",
+    "HORIZONTAL"
+   ],
+   [
+    "GREEN",
+    "SQUARE"
+   ],
+   [
+    "BLUE",
+    "CIRCLE"
+   ]
+  ]
+ },
+ "hit_model": {
+  "base_w": 1280,
+  "ir": {
+   "Ax": 0.0,
+   "Bx": 0.0,
+   "Ay": 0.0,
+   "By": 0.0,
+   "Cy": 0.0,
+   "samples": []
+  },
+  "gel": {
+   "Ax": 0.0,
+   "Bx": -576.0,
+   "Ay": 0.0,
+   "By": 1587.0,
+   "Cy": 0.0,
+   "samples": [
+    [
+     64.0,
+     -9.0,
+     24.8
+    ]
+   ]
+  }
+ },
+ "targets": {
+  "colors": [
+   "RED",
+   "YELLOW",
+   "GREEN",
+   "BLUE"
+  ],
+  "shapes": [
+   "VERTICAL",
+   "HORIZONTAL",
+   "SQUARE",
+   "CIRCLE"
+  ],
+  "pairs": [],
+  "order": "left_to_right"
+ }
+}

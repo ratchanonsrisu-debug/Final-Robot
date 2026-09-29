@@ -8,6 +8,7 @@ explorer.py — หัวใจของ SLAM แบบกริด
                แล้ว Recenter  -> Localization (ลด error สะสมจาก odometry)
   4) PLAN    : BFS หาช่องที่ยังไม่สำรวจที่ใกล้ที่สุด (frontier) + A* หาเส้นทาง
   5) ACT     : เดินทีละช่อง (ตัวถังไม่หมุน ใช้ล้อ mecanum) + แก้มุม yaw ด้วย IMU
+  +) SHOOT   : (ถ้ามี hunter) ระหว่าง SENSE กล้องหาป้ายทุกทิศ -> หลังสแกนช่อง ยิงป้ายที่อยู่ในระยะ (shooter.py)
 """
 import csv
 import os
@@ -66,7 +67,7 @@ class RunLogger:
 
 
 class Explorer:
-    def __init__(self, robot, gmap, logger, on_update=None, stop_event=None, echo=print):
+    def __init__(self, robot, gmap, logger, on_update=None, stop_event=None, echo=print, hunter=None):
         self.r = robot
         self.m = gmap
         self.L = logger
@@ -77,6 +78,11 @@ class Explorer:
         self.plan = []            # เส้นทางที่วางแผนไว้ (list ของ cell) ไว้ให้ GUI วาด
         self.warnings = 0
         self.last_block = None     # (cell, d, conflict) ของการ blocked ล่าสุดใน step()
+        self.hunter = hunter
+        if hunter is not None:
+            hunter.attach(self)
+        elif hasattr(robot, "on_look"):
+            robot.on_look = None
 
     def stopped(self):
         return self.stop is not None and self.stop.is_set()
@@ -437,6 +443,8 @@ class Explorer:
     def _sense_here(self, update_map=True, event="scan"):
         obs = self.sense(update_map, event)
         self.last_tof["_cell"] = self.r.cell
+        if self.hunter is not None and not self.stopped():
+            self.hunter.after_scan()        # ยิงป้ายที่เห็นระหว่างสแกนช่องนี้ (ถ้าอยู่ในระยะ)
         return obs
 
     def follow(self, path, rescan=True):
@@ -481,6 +489,8 @@ class Explorer:
             self.plan = self._cells_of(path)
             self.echo(f"frontier -> {tgt}  path={''.join(DIRS[d] for d in path)}")
             self.follow(path, rescan=True)
+        if self.hunter is not None and not self.stopped():
+            self.hunter.sweep()             # ยังมีเป้าที่ต้องยิงค้าง -> ไปช่องยิงก่อนกลับบ้าน
         if C.RETURN_HOME and not self.stopped():
             self.return_home()
         self.plan = []

@@ -48,6 +48,8 @@ class SimRobot:
         self.off = [0.0, 0.0]
         self._rnd = random.Random(seed)
         self._yaw = 0.0
+        self.body_heading = self.heading   # strafe: ตัวถังหันทิศเดิมตลอด (กล้องจำลองใช้)
+        self.on_look = None                # callback(d) หลังสแกน ToF ทิศ d (TargetHunter.look)
 
     # ---------- pose ----------
     def est_xy(self):
@@ -66,6 +68,7 @@ class SimRobot:
     def set_pose(self, cx, cy, heading):
         self.cell = (cx, cy)
         self.heading = dir_index(heading)
+        self.body_heading = self.heading
         self.off = [0.0, 0.0]
         self.odo_ref = [None, None]
 
@@ -103,7 +106,12 @@ class SimRobot:
         return max(C.TOF_BLIND_ZONE_MM, min(C.TOF_MAX_VALID_MM, mm))
 
     def scan_all(self):
-        return {d: self.read_dir(d) for d in range(4)}
+        out = {}
+        for d in range(4):
+            out[d] = self.read_dir(d)
+            if self.on_look:
+                self.on_look(d, out[d])
+        return out
 
     def read_sharp(self, d):
         return None             # จำลองไม่มี Sharp -> explorer ใช้ ToF อย่างเดียว
@@ -175,6 +183,9 @@ class RealRobot:
         #: wait_for_completed() อย่างเดียว (เคยสงสัยว่าค่า ToF ผิดปกติเกิดจากเริ่มอ่านตอน
         #: gimbal ยังหมุนไม่หยุด)
         self._gimbal_yaw = 0.0
+        self._gimbal_pitch = 0.0
+        #: callback(d) หลังอ่าน ToF ทิศ d ใน scan_all() ขณะ gimbal/กล้องยังชี้ทิศนั้น (TargetHunter.look)
+        self.on_look = None
         self._att_n = 0         # จำนวน callback attitude/position ที่ได้รับแล้ว
         self._pos_n = 0
         self._move_start = None  # odometry ตอนเริ่ม move_cell ล่าสุด (ใช้ undo_last_move)
@@ -217,6 +228,7 @@ class RealRobot:
         self._tof = list(info)
 
     def _on_gimbal_angle(self, info):
+        self._gimbal_pitch = info[0]
         self._gimbal_yaw = info[1]
 
     def _on_attitude(self, info):
@@ -399,7 +411,14 @@ class RealRobot:
         return self._sharp_adc_to_mm(statistics.median(vals), table), expect
 
     def scan_all(self):
-        out = {d: self.read_dir(d) for d in range(4)}
+        out = {}
+        for d in range(4):
+            out[d] = self.read_dir(d)
+            if self.on_look:
+                try:
+                    self.on_look(d, out[d])  # กล้องอยู่บน gimbal เดียวกับ ToF -> หาป้ายทิศนี้ไปด้วยเลย
+                except Exception as e:                      # noqa: BLE001
+                    self.log(f"[look] หาป้ายทิศ {DIRS[d]} ผิดพลาด: {e!r}")
         try:
             self._ep.gimbal.moveto(pitch=C.GIMBAL_PITCH, yaw=0,
                                    yaw_speed=C.GIMBAL_YAW_SPEED).wait_for_completed(timeout=4.0)

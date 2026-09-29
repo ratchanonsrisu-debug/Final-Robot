@@ -1,0 +1,5 @@
+opencv-python
+numpy
+pillow
+matplotlib
+robomaster   # หุ่นจริงเท่านั้น (Python 3.7-3.8)
