@@ -197,11 +197,14 @@ class VisionThread:
     Thread 2: Vision & Target Detection Thread
     ==========================================
     เธรดประมวลผลภาพกล้อง 30 FPS ดึงเฟรมสด (Drop Old Queue) และตัดภาพเหนือโฟม 11.5 นิ้ว
+    รองรับ Multi-Target Tracking & List Mode (ยิงหลายเป้า/หลายทรง/หลายสีในการวิ่งรอบเดียว)
     """
-    def __init__(self, ep_camera, target_color="red", target_shape="rectangle_horizontal"):
+    def __init__(self, ep_camera, target_color="any", target_shape="any", target_list=None):
         self.ep_camera = ep_camera
         self.target_color = target_color
         self.target_shape = target_shape
+        # target_list: รายการเป้าหมาย เช่น [{"color": "red", "shape": "circle"}, {"color": "blue", "shape": "square"}]
+        self.target_list = target_list if target_list is not None else []
         
         self.frame_queue = queue.Queue(maxsize=1)
         self.lock = threading.Lock()
@@ -212,10 +215,15 @@ class VisionThread:
         self.target_center = None       # (cx, cy)
         self.target_area = 0.0
         self.detected_shape = "unidentified"
+        self.detected_color = "unidentified"
         self.spotted_frames = 0
         self.latest_frame = None
         self.frame_size = (640, 360)
         self.foam_top_y = None
+
+        # Multi-Target Memory: บันทึกประวัติเป้าหมายที่ยิงแล้วเพื่อป้องกันยิงเป้าเดิมซ้ำ
+        self.shot_targets = []  # List of dict: [{"color": ..., "shape": ..., "center": (x,y), "time": timestamp}]
+        self.shot_cooldown_sec = 15.0  # Cooldown สำหรับเป้าเดิม
         
         # Trackbars Controls
         self.win_name = "Robot Vision (Thread 2 - Camera Engine)"
@@ -227,7 +235,7 @@ class VisionThread:
     def start(self):
         if not self.running:
             self.running = True
-            print(f"[VisionThread] 📷 เริ่มทำงานเธรดประมวลผลภาพ (Target: {self.target_color} {self.target_shape})...")
+            print(f"[VisionThread] 📷 เริ่มทำงานเธรดประมวลผลภาพ (Multi-Target Mode | Filter: {self.target_color} {self.target_shape})...")
             try:
                 self.ep_camera.start_video_stream(display=False)
             except Exception:
@@ -255,13 +263,49 @@ class VisionThread:
                 self.detected_shape,
                 self.target_area,
                 self.frame_size[0],
-                self.frame_size[1]
+                self.frame_size[1],
+                self.detected_color
             )
 
-    def set_target_filter(self, color, shape):
+    def set_target_filter(self, color, shape, target_list=None):
         with self.lock:
             self.target_color = color
             self.target_shape = shape
+            if target_list is not None:
+                self.target_list = target_list
+
+    def mark_target_as_shot(self, color, shape, center):
+        """บันทึกเป้าหมายที่ยิงสำเร็จลงความจำเพื่อไม่ให้ยิงซ้ำในการวิ่งรอบนี้"""
+        with self.lock:
+            record = {
+                "color": color,
+                "shape": shape,
+                "center": center,
+                "time": time.time()
+            }
+            self.shot_targets.append(record)
+            print(f"[VisionThread] 🎯 บันทึกเป้าหมายที่ยิงแล้ว: สี={color}, ทรง={shape}, ตำแหน่ง={center}")
+
+    def clear_shot_history(self):
+        with self.lock:
+            self.shot_targets.clear()
+
+    def _is_already_shot(self, color, shape, center, threshold_px=80):
+        """ตรวจสอบว่าเป้าหมายนี้ถูกยิงไปแล้วหรือยัง (เช็คสี, ทรง และพิกัดใกล้เคียง)"""
+        now = time.time()
+        for shot in self.shot_targets:
+            if (now - shot["time"]) > self.shot_cooldown_sec:
+                continue
+            # ถ้าเป็นสีและทรงเดียวกัน หรือมีพิกัดภาพใกล้เคียงกัน ให้ถือว่าเป็นเป้าเดิมที่ยิงแล้ว
+            same_type = (shot["color"] == color and shot["shape"] == shape)
+            close_position = False
+            if center and shot["center"]:
+                dist = np.hypot(center[0] - shot["center"][0], center[1] - shot["center"][1])
+                if dist < threshold_px:
+                    close_position = True
+            if same_type or close_position:
+                return True
+        return False
 
     def _setup_trackbars(self):
         try:
@@ -344,6 +388,7 @@ class VisionThread:
             with self.lock:
                 cur_color = self.target_color
                 cur_shape = self.target_shape
+                cur_target_list = list(self.target_list)
 
             # -------------------------------------------------------------
             #  เส้นขอบโฟม 11.5 นิ้วแบบคงที่ (Static Foam Cutoff Line)
@@ -362,6 +407,7 @@ class VisionThread:
             best_cnt = None
             max_area = 0.0
             found_shape = "unidentified"
+            found_color = "unidentified"
             found_center = None
 
             for cnt in contours:
@@ -370,6 +416,7 @@ class VisionThread:
                     x, y, cw, ch = cv2.boundingRect(cnt)
                     cx_cnt = x + cw // 2
                     cy_cnt = y + ch // 2
+                    cnt_center = (cx_cnt, cy_cnt)
 
                     # ⛔ กรองตัดวัตถุเหนือขอบโฟม 11.5 นิ้วออกเด็ดขาด (เหนือเส้นตัดคงที่)
                     if cutoff_active and foam_top_y is not None:
@@ -388,14 +435,45 @@ class VisionThread:
 
                     shape, _ = detect_shape(cnt)
                     
+                    # จำแนกสีเฉพาะของ Contour (กรณี cur_color == "any")
+                    if cur_color == "any":
+                        roi_hsv = hsv[y:y+ch, x:x+cw]
+                        c_scores = {c: cv2.countNonZero(get_color_mask(roi_hsv, c)) for c in ["red", "blue", "yellow", "green"]}
+                        cnt_color = max(c_scores, key=c_scores.get) if max(c_scores.values()) > 50 else "any"
+                    else:
+                        cnt_color = cur_color
+
+                    # ตรวจสอบว่าถูกยิงไปแล้วในรอบนี้หรือไม่ (Multi-Target Memory)
+                    if self._is_already_shot(cnt_color, shape, cnt_center):
+                        cv2.rectangle(img, (x, y), (x + cw, y + ch), (128, 128, 128), 1)
+                        cv2.putText(img, f"[SHOT] {cnt_color} {shape}", (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (180, 180, 180), 1)
+                        continue
+
                     # วาดป้ายชื่อและทรงรอบ Contour ทุกอันที่ผ่านเกณฑ์
                     cv2.rectangle(img, (x, y), (x + cw, y + ch), (255, 200, 0), 1)
-                    cv2.putText(img, f"{shape} (a:{int(area)})", (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
+                    cv2.putText(img, f"{cnt_color} {shape} (a:{int(area)})", (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
 
-                    if (cur_shape == "any" or shape == cur_shape or (cur_shape == "rectangle" and "rectangle" in shape)) and area > max_area:
+                    # ตรวจสอบเงื่อนไขกับ Target List หรือ Color/Shape Filter
+                    matched = False
+                    if cur_target_list:
+                        for target_spec in cur_target_list:
+                            req_c = target_spec.get("color", "any")
+                            req_s = target_spec.get("shape", "any")
+                            c_ok = (req_c == "any" or req_c == cnt_color)
+                            s_ok = (req_s == "any" or req_s == shape or (req_s == "rectangle" and "rectangle" in shape))
+                            if c_ok and s_ok:
+                                matched = True
+                                break
+                    else:
+                        c_ok = (cur_color == "any" or cur_color == cnt_color)
+                        s_ok = (cur_shape == "any" or cur_shape == shape or (cur_shape == "rectangle" and "rectangle" in shape))
+                        matched = c_ok and s_ok
+
+                    if matched and area > max_area:
                         max_area = area
                         best_cnt = cnt
                         found_shape = shape
+                        found_color = cnt_color
                         rect = cv2.minAreaRect(cnt)
                         found_center = (int(rect[0][0]), int(rect[0][1]))
 
@@ -408,6 +486,7 @@ class VisionThread:
                         self.target_center = found_center
                         self.target_area = max_area
                         self.detected_shape = found_shape
+                        self.detected_color = found_color
                         
                     cv2.drawContours(img, [best_cnt], -1, (0, 255, 0), 2)
                     if found_center:
@@ -418,6 +497,7 @@ class VisionThread:
                     self.target_center = None
                     self.target_area = 0.0
                     self.detected_shape = "unidentified"
+                    self.detected_color = "unidentified"
 
                 self.latest_frame = img.copy()
 
@@ -435,7 +515,8 @@ class VisionThread:
             
             # แถบสเปกตรัมสถานะบนภาพ
             cv2.rectangle(img, (0, 0), (w, 35), (20, 20, 20), -1)
-            status_txt = f"FPS:{fps:.1f} | Filter: [{cur_color.upper()}] [{cur_shape.upper()}] | Detected: {self.target_detected}"
+            shot_cnt = len(self.shot_targets)
+            status_txt = f"FPS:{fps:.1f} | Filter: [{cur_color.upper()}] [{cur_shape.upper()}] | Shot: {shot_cnt} | Target: {self.detected_color} {self.detected_shape}"
             status_color = (0, 255, 0) if self.target_detected else (0, 255, 255)
             cv2.putText(img, status_txt, (10, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.5, status_color, 1)
 
@@ -507,9 +588,13 @@ class GimbalTrackingThread:
         self.stop_gimbal()
         return self.has_fired
 
-    def _do_fire(self):
+    def _do_fire(self, target_color="any", target_shape="any", center=None):
         self.has_fired = True
-        print("[GimbalTrackingThread] 💥💥 ยิงสำเร็จเรียบร้อย! (FIRE CONFIRMED)")
+        print(f"[GimbalTrackingThread] 💥💥 ยิงสำเร็จเรียบร้อย! (FIRE CONFIRMED: {target_color} {target_shape})")
+        # บันทึกประวัติเป้าหมายที่ยิงสำเร็จลง VisionThread
+        if self.vision_thread:
+            self.vision_thread.mark_target_as_shot(target_color, target_shape, center)
+
         if self.ep_led is not None:
             with hardware_cmd_lock:
                 try:
@@ -539,7 +624,7 @@ class GimbalTrackingThread:
             lost_frames = 0
             
             while self.running and self.is_aiming:
-                detected, center, shape, area, fw, fh = self.vision_thread.get_target_info()
+                detected, center, shape, area, fw, fh, color = self.vision_thread.get_target_info()
                 
                 if detected and center is not None:
                     lost_frames = 0
@@ -562,7 +647,7 @@ class GimbalTrackingThread:
                         self.stop_gimbal()
                         locked_frames += 1
                         if locked_frames >= 2 or force_lock:
-                            self._do_fire()
+                            self._do_fire(target_color=color, target_shape=shape, center=center)
                             self.is_aiming = False
                             break
                     else:
@@ -643,7 +728,7 @@ class RobotCoordinator:
             
             if state == RobotState.NAVIGATING:
                 if not self.is_in_cooldown():
-                    detected, center, shape, area, w, h = self.vision_thread.get_target_info()
+                    detected, center, shape, area, w, h, color = self.vision_thread.get_target_info()
                     if detected:
                         self.set_state(RobotState.TARGET_SPOTTED)
                         
@@ -653,15 +738,21 @@ class RobotCoordinator:
 #  AutoShooter Orchestrator (Multi-Thread Integration Container)
 # =============================================================================
 class AutoShooter:
-    def __init__(self, ep_camera, ep_gimbal, ep_blaster, color="red", shape="rectangle_horizontal", ep_led=None):
-        self.vision_thread = VisionThread(ep_camera, target_color=color, target_shape=shape)
+    def __init__(self, ep_camera, ep_gimbal, ep_blaster, color="any", shape="any", target_list=None, ep_led=None):
+        self.vision_thread = VisionThread(ep_camera, target_color=color, target_shape=shape, target_list=target_list)
         self.tracking_thread = GimbalTrackingThread(ep_gimbal, ep_blaster, self.vision_thread, ep_led=ep_led)
         self.coordinator = RobotCoordinator(self.vision_thread, self.tracking_thread)
 
     @property
     def target_detected(self):
-        status, _, _, _, _, _ = self.vision_thread.get_target_info()
+        status, _, _, _, _, _, _ = self.vision_thread.get_target_info()
         return status
+
+    def set_target_filter(self, color="any", shape="any", target_list=None):
+        self.vision_thread.set_target_filter(color, shape, target_list=target_list)
+
+    def clear_shot_history(self):
+        self.vision_thread.clear_shot_history()
 
     def start(self):
         self.vision_thread.start()
@@ -679,6 +770,6 @@ class AutoShooter:
     def execute_shoot(self, timeout=4.0):
         self.coordinator.set_state(RobotState.AIM_AND_SHOOT)
         fired = self.tracking_thread.trigger_shoot(timeout=timeout)
-        self.coordinator.cooldown_until = time.time() + 15.0
+        self.coordinator.cooldown_until = time.time() + 10.0
         self.coordinator.set_state(RobotState.NAVIGATING)
         return fired

@@ -41,12 +41,19 @@ class PIDController:
         self.last_time = time.time()
 
 # =============================================================================
-#  ตั้งค่าเป้าหมายที่ต้องการตรวจจับ (Shape & Color)
+#  ตั้งค่าเป้าหมายที่ต้องการตรวจจับ (Shape & Color Multi-Target System)
 # =============================================================================
-# ตัวเลือกสี: "red", "blue", "yellow", "green"
-# ตัวเลือกรูปทรง: "circle", "square", "rectangle"
-TARGET_COLOR = "red"
-TARGET_SHAPE = "rectangle"
+# ตัวเลือกสี: "red", "blue", "yellow", "green", "any"
+# ตัวเลือกรูปทรง: "circle", "square", "rectangle", "any"
+# รองรับการกำหนดเป้าหมายหลายแบบในรอบเดียว (Target List)
+TARGET_LIST = [
+    {"color": "red", "shape": "circle"},
+    {"color": "blue", "shape": "square"},
+    {"color": "yellow", "shape": "rectangle"},
+    {"color": "green", "shape": "circle"}
+]
+TARGET_COLOR = "any"
+TARGET_SHAPE = "any"
 
 # =============================================================================
 #  ฟังก์ชันตรวจจับสี (HSV Range)
@@ -62,7 +69,21 @@ def get_color_mask(hsv_img, color):
         return cv2.inRange(hsv_img, np.array([20, 100, 100]), np.array([30, 255, 255]))
     elif color == "green":
         return cv2.inRange(hsv_img, np.array([35, 100, 100]), np.array([85, 255, 255]))
+    elif color == "any":
+        m1 = cv2.bitwise_or(get_color_mask(hsv_img, "red"), get_color_mask(hsv_img, "blue"))
+        m2 = cv2.bitwise_or(get_color_mask(hsv_img, "yellow"), get_color_mask(hsv_img, "green"))
+        return cv2.bitwise_or(m1, m2)
     return np.zeros(hsv_img.shape[:2], dtype=np.uint8)
+
+def classify_contour_color(hsv_img, cnt):
+    """จำแนกสีเฉพาะของ contour จาก ROI HSV"""
+    x, y, w, h = cv2.boundingRect(cnt)
+    roi_hsv = hsv_img[y:y+h, x:x+w]
+    if roi_hsv.size == 0:
+        return "unidentified"
+    scores = {c: cv2.countNonZero(get_color_mask(roi_hsv, c)) for c in ["red", "blue", "yellow", "green"]}
+    best_c = max(scores, key=scores.get)
+    return best_c if scores[best_c] > 30 else "unidentified"
 
 # =============================================================================
 #  ฟังก์ชันตรวจจับรูปร่าง
@@ -146,14 +167,15 @@ def main():
     ep_gimbal.recenter().wait_for_completed()
     time.sleep(1)
 
-    # PID Controllers (ปรับจูนค่าตามความเหมาะสมของหุ่น)
+    # PID Controllers
     pid_yaw = PIDController(kp=80.0, ki=0.0, kd=0.0, limits=(-150, 150))
     pid_pitch = PIDController(kp=80.0, ki=0.0, kd=0.0, limits=(-100, 100))
 
     target_locked_frames = 0
     TARGET_LOCK_THRESHOLD = 5  # ต้องตรวจเจอต่อเนื่องกี่เฟรมถึงจะยิง
+    shot_targets = []  # บันทึกเป้าหมายที่ยิงแล้วในรอบนี้
     
-    print(f"กำลังค้นหาเป้าหมาย: รูปทรง {TARGET_SHAPE} สี {TARGET_COLOR}")
+    print(f"กำลังค้นหาเป้าหมายหลากรูปแบบ (Target List: {len(TARGET_LIST)} รายการ)...")
 
     try:
         while True:
@@ -165,7 +187,7 @@ def main():
             h, w = img.shape[:2]
             hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
             
-            # 1. กรองสี
+            # 1. กรองสีเป้าหมาย
             mask = get_color_mask(hsv, TARGET_COLOR)
             
             # ลด Noise
@@ -177,15 +199,58 @@ def main():
             
             target_found = False
             best_contour = None
+            found_color = "unidentified"
+            found_shape = "unidentified"
             max_area = 0
 
             for cnt in contours:
                 area = cv2.contourArea(cnt)
                 if area > 1000:  # กรองขนาดที่เล็กเกินไปทิ้ง
+                    x, y, cw, ch = cv2.boundingRect(cnt)
+                    cx_cnt = x + cw // 2
+                    cy_cnt = y + ch // 2
+                    cnt_center = (cx_cnt, cy_cnt)
+
                     shape, approx = detect_shape(cnt)
-                    if shape == TARGET_SHAPE and area > max_area:
+                    cnt_color = classify_contour_color(hsv, cnt) if TARGET_COLOR == "any" else TARGET_COLOR
+
+                    # เช็คว่ายิงไปแล้วหรือยัง
+                    already_shot = False
+                    for shot in shot_targets:
+                        if shot["color"] == cnt_color and shot["shape"] == shape:
+                            already_shot = True
+                            break
+                        if np.hypot(cnt_center[0] - shot["center"][0], cnt_center[1] - shot["center"][1]) < 80:
+                            already_shot = True
+                            break
+
+                    if already_shot:
+                        cv2.rectangle(img, (x, y), (x + cw, y + ch), (128, 128, 128), 1)
+                        cv2.putText(img, f"[SHOT] {cnt_color} {shape}", (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (180, 180, 180), 1)
+                        continue
+
+                    # เช็คความสอดคล้องกับ TARGET_LIST หรือ TARGET_COLOR/SHAPE
+                    matched = False
+                    if TARGET_LIST:
+                        for spec in TARGET_LIST:
+                            c_ok = (spec["color"] == "any" or spec["color"] == cnt_color)
+                            s_ok = (spec["shape"] == "any" or spec["shape"] == shape or (spec["shape"] == "rectangle" and "rectangle" in shape))
+                            if c_ok and s_ok:
+                                matched = True
+                                break
+                    else:
+                        c_ok = (TARGET_COLOR == "any" or TARGET_COLOR == cnt_color)
+                        s_ok = (TARGET_SHAPE == "any" or TARGET_SHAPE == shape or (TARGET_SHAPE == "rectangle" and "rectangle" in shape))
+                        matched = c_ok and s_ok
+
+                    cv2.rectangle(img, (x, y), (x + cw, y + ch), (255, 200, 0), 1)
+                    cv2.putText(img, f"{cnt_color} {shape}", (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
+
+                    if matched and area > max_area:
                         max_area = area
                         best_contour = cnt
+                        found_color = cnt_color
+                        found_shape = shape
 
             # วาดเส้นกากบาทกลางจอ
             cv2.drawMarker(img, (w//2, h//2), (0, 255, 255), markerType=cv2.MARKER_CROSS, markerSize=20, thickness=2)
@@ -204,8 +269,8 @@ def main():
                     # วาดกรอบและจุดกึ่งกลางเป้าหมายที่เลือก
                     cv2.drawContours(img, [best_contour], -1, (0, 255, 0), 2)
                     cv2.circle(img, (cx, cy), 5, (255, 0, 0), -1)
-                    cv2.putText(img, f"{TARGET_COLOR} {TARGET_SHAPE}", (cx - 20, cy - 20),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+                    cv2.putText(img, f"LOCK: {found_color} {found_shape}", (cx - 30, cy - 20),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
                     # คำนวณความเร็ว Gimbal
                     yaw_speed = pid_yaw.compute(err_x)
@@ -215,11 +280,12 @@ def main():
                     if abs(err_x) < 0.03 and abs(err_y) < 0.03:
                         ep_gimbal.drive_speed(pitch_speed=0, yaw_speed=0)
                         target_locked_frames += 1
-                        print(f"เล็งเป้าสำเร็จ! (นิ่ง {target_locked_frames}/{TARGET_LOCK_THRESHOLD})")
+                        print(f"เล็งเป้าสำเร็จ! ({found_color} {found_shape}) (นิ่ง {target_locked_frames}/{TARGET_LOCK_THRESHOLD})")
                         
                         if target_locked_frames >= TARGET_LOCK_THRESHOLD:
-                            print(">> ยิงงงงงง! <<")
+                            print(f">> 💥 ยิงเป้าหมาย: {found_color} {found_shape}! <<")
                             ep_blaster.fire(fire_type=blaster.IR_FIRE, times=1)
+                            shot_targets.append({"color": found_color, "shape": found_shape, "center": (cx, cy), "time": time.time()})
                             target_locked_frames = 0
                             pid_yaw.reset()
                             pid_pitch.reset()
@@ -238,7 +304,7 @@ def main():
                 pid_pitch.reset()
 
             # แสดงภาพสำหรับการ Debug
-            cv2.imshow("Robot Camera - Shape & Color Detection", img)
+            cv2.imshow("Robot Camera - Multi Target Detection & Shoot", img)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
