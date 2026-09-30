@@ -35,7 +35,7 @@ config.py     + ค่า SHOOT_* (เปิด/ปิดยิง, กระส
 robots.py     + on_look ใน scan_all, เก็บ gimbal pitch, SimRobot.body_heading
 explorer.py   + hunter (after_scan หลังสแกนช่อง)
 evaluation.py + วาด/Export ตำแหน่งเป้า
-gui.py        + กล่อง "5) ยิงเป้า", ปุ่มรอบ 2, วาดเป้าบนแผนที่, นาฬิกาจับเวลา
+gui.py        + กล่อง "5) ยิงเป้า" (ตารางติ๊กเป้า สี × รูปทรง), ปุ่มรอบ 2, วาดเป้าบนแผนที่, นาฬิกาจับเวลา
 ```
 
 ผลลัพธ์อยู่ที่ `output/run_<เวลา>/` (รอบ 2 ต่อท้าย `_round2`), ภาพทุกนัดใน `shots/`, สรุปการยิงใน `shots.csv`

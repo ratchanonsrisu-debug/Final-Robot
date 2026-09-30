@@ -24,6 +24,8 @@ import config as C
 from grid_map import GridMap, random_maze, DIRS, DX, DY, WALL, OPEN, UNKNOWN
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+COLOR_TXT = ["RED", "YELLOW", "GREEN", "BLUE"]
+SHAPE_TXT = [("VERTICAL", "ตั้ง"), ("HORIZONTAL", "นอน"), ("SQUARE", "จัตุรัส"), ("CIRCLE", "วงกลม")]
 CANVAS = 620
 PAD = 30
 
@@ -68,6 +70,8 @@ class App:
     def _build(self):
         left = ttk.Frame(self.root, padding=6)
         left.pack(side=tk.LEFT, fill=tk.Y)
+        left2 = ttk.Frame(self.root, padding=(0, 6, 6, 6))     # คอลัมน์ 2: ไฟล์ + ยิงเป้า (จอไม่สูงพอใส่คอลัมน์เดียว)
+        left2.pack(side=tk.LEFT, fill=tk.Y)
         right = ttk.Frame(self.root, padding=6)
         right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
@@ -125,7 +129,7 @@ class App:
                             command=self.redraw).pack(anchor="w")
 
         # ---- files ----
-        f4 = ttk.LabelFrame(left, text="4) ไฟล์ / ประเมินผล", padding=6)
+        f4 = ttk.LabelFrame(left2, text="4) ไฟล์ / ประเมินผล", padding=6)
         f4.pack(fill=tk.X, pady=4)
         g = ttk.Frame(f4); g.pack(fill=tk.X)
         ttk.Button(g, text="บันทึกแผนที่", command=self.save_map).grid(row=0, column=0, sticky="ew")
@@ -140,23 +144,37 @@ class App:
                         command=self.redraw).pack(anchor="w")
 
         # ---- shooting ----
-        f5 = ttk.LabelFrame(left, text="5) ยิงเป้า (Assignment 2)", padding=6)
+        f5 = ttk.LabelFrame(left2, text="5) ยิงเป้า (Assignment 2)", padding=6)
         f5.pack(fill=tk.X, pady=4)
         self.v_hunt = tk.BooleanVar(value=C.SHOOT_ENABLE)
         self.v_fire = tk.BooleanVar(value=C.SHOOT_FIRE)
         self.v_ammo = tk.StringVar(value=C.SHOOT_AMMO)
-        self.v_spec = tk.StringVar(value=C.SHOOT_TARGETS)
         self.v_tiles = tk.DoubleVar(value=C.SHOOT_MAX_TILES)
         r0 = ttk.Frame(f5); r0.pack(fill=tk.X)
         ttk.Checkbutton(r0, text="หาป้าย (กล้อง)", variable=self.v_hunt).pack(side=tk.LEFT)
         ttk.Checkbutton(r0, text="ยิงจริง", variable=self.v_fire).pack(side=tk.LEFT, padx=6)
         ttk.Combobox(r0, values=["gel", "ir"], textvariable=self.v_ammo, width=4,
                      state="readonly").pack(side=tk.LEFT)
-        r1 = ttk.Frame(f5); r1.pack(fill=tk.X, pady=2)
-        ttk.Label(r1, text="เป้าที่ต้องยิง").pack(side=tk.LEFT)
-        ttk.Entry(r1, textvariable=self.v_spec, width=22).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
-        ttk.Label(f5, text='เช่น "RED:CIRCLE, BLUE:SQUARE" / ว่าง = ตาม settings.json',
-                  foreground="#777").pack(anchor="w")
+        # ตารางเป้าที่ต้องยิง: ติ๊กทีละคู่ สี × รูปทรง (กดหัวแถว/หัวคอลัมน์ = ติ๊ก/เอาออกทั้งแถว/คอลัมน์)
+        g5 = ttk.Frame(f5); g5.pack(fill=tk.X, pady=(4, 2))
+        ttk.Label(g5, text="เป้าที่ต้องยิง").grid(row=0, column=0, sticky="w")
+        init = self._initial_spec()
+        self.v_tgt = {}
+        for j, (sh, txt) in enumerate(SHAPE_TXT):
+            tk.Button(g5, text=txt, font=("Segoe UI", 8), relief="groove", padx=2, pady=0,
+                      command=lambda sh=sh: self._toggle_line(shape=sh)).grid(row=0, column=j + 1, sticky="ew")
+        for i, col in enumerate(COLOR_TXT):
+            tk.Button(g5, text=col, font=("Segoe UI", 8, "bold"), relief="groove", width=7, padx=2, pady=0,
+                      bg=self.TCOL[col], fg="#000" if col == "YELLOW" else "#fff",
+                      activebackground=self.TCOL[col],
+                      command=lambda col=col: self._toggle_line(color=col)).grid(row=i + 1, column=0, sticky="ew")
+            for j, (sh, _) in enumerate(SHAPE_TXT):
+                v = tk.BooleanVar(value=(col, sh) in init)
+                self.v_tgt[(col, sh)] = v
+                ttk.Checkbutton(g5, variable=v, command=self._on_spec_changed).grid(row=i + 1, column=j + 1)
+        self.v_spec_txt = tk.StringVar()
+        ttk.Label(f5, textvariable=self.v_spec_txt, foreground="#1565c0", wraplength=260).pack(anchor="w")
+        self._on_spec_changed()
         r2 = ttk.Frame(f5); r2.pack(fill=tk.X)
         ttk.Label(r2, text="ยิงได้ไกลสุด (กระเบื้อง)").pack(side=tk.LEFT)
         ttk.Entry(r2, textvariable=self.v_tiles, width=5).pack(side=tk.LEFT, padx=2)
@@ -254,10 +272,48 @@ class App:
             self.logger = RunLogger(self.out_dir, echo=self.log)
             self.log(f"log -> {self.out_dir}")
 
+    def _initial_spec(self):
+        """ค่าเริ่มของตาราง: SHOOT_TARGETS ใน config.py ถ้าตั้งไว้ ไม่งั้นใช้ targets ใน settings.json"""
+        from shooter import parse_spec, SHAPES
+        try:
+            spec = parse_spec(C.SHOOT_TARGETS)
+        except ValueError:
+            spec = []
+        if spec:
+            return {(c, s) for c, sh in spec for s in ([sh] if sh else SHAPES)}
+        import settings as ST
+        T = ST.load()["targets"]
+        if T.get("pairs"):
+            return {tuple(p) for p in T["pairs"]}
+        return {(c, s) for c in T["colors"] for s in T["shapes"]}
+
+    def _grid_spec(self):
+        return [k for k, v in self.v_tgt.items() if v.get()]
+
+    def _toggle_line(self, color=None, shape=None):
+        keys = [k for k in self.v_tgt if (color is None or k[0] == color) and (shape is None or k[1] == shape)]
+        on = not all(self.v_tgt[k].get() for k in keys)
+        for k in keys:
+            self.v_tgt[k].set(on)
+        self._on_spec_changed()
+
+    def _on_spec_changed(self):
+        spec = self._grid_spec()
+        names = dict(SHAPE_TXT)
+        self.v_spec_txt.set(f"ยิง {len(spec)} แบบ: " + ", ".join(f"{c}/{names[s]}" for c, s in spec)
+                            if spec else "⚠ ยังไม่ได้ติ๊กเป้าที่ต้องยิง")
+        h = getattr(self, "hunter", None)
+        if h is not None:                     # เปลี่ยนระหว่างรันได้ทันที + อัปเดตป้ายที่เจอแล้ว
+            h.spec = spec or [("NONE", None)]
+            for t in h.targets:
+                t["spec"] = h.spec_ok(t["color"], t["shape"])
+
     def _apply_hunter_opts(self):
-        from shooter import parse_spec
         h = self.hunter
-        h.spec = parse_spec(self.v_spec.get())
+        spec = self._grid_spec()
+        if not spec and self.v_hunt.get() and self.v_fire.get():
+            raise ValueError("ยังไม่ได้ติ๊กเป้าที่ต้องยิงในตาราง (กล่อง 5)")
+        self._on_spec_changed()
         h.enabled = bool(self.v_hunt.get())
         h.fire = bool(self.v_fire.get())
         h.ammo = self.v_ammo.get()
@@ -266,6 +322,7 @@ class App:
     def _make_hunter(self, io, sim):
         from shooter import TargetHunter, make_settings
         self.hunter = TargetHunter(io, make_settings(sim=sim), log=self.log, sim=sim)
+        self._on_spec_changed()
         self.log(f"[shooter] พร้อม: เป้าที่ต้องยิง = {self.hunter.spec_text()}")
 
     def _read_settings(self):
