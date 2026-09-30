@@ -23,9 +23,10 @@ AIM_TOLERANCE = 0.005
 
 
 def find_latest_log():
-    files = glob.glob(os.path.join(SCRIPT_DIR, "gimbal_pid_log_*.csv"))
+    log_dir = os.path.join(SCRIPT_DIR, "logs")
+    files = glob.glob(os.path.join(log_dir, "gimbal_pid_log_*.csv"))
     if not files:
-        raise FileNotFoundError("ไม่พบไฟล์ gimbal_pid_log_*.csv ในโฟลเดอร์นี้ ลองรัน gimbal_pid_lab.py ก่อน")
+        raise FileNotFoundError("ไม่พบไฟล์ gimbal_pid_log_*.csv ในโฟลเดอร์ logs ลองรัน gimbal_pid_lab.py ก่อน")
     return max(files, key=os.path.getmtime)
 
 

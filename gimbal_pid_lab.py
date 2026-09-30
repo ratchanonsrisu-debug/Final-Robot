@@ -345,7 +345,8 @@ def main():
         pitch_angle, yaw_angle, _pitch_ground, _yaw_ground = angle_info
         gimbal_state.update(pitch_angle, yaw_angle)
 
-    log_dir = os.path.dirname(os.path.abspath(__file__))
+    log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+    os.makedirs(log_dir, exist_ok=True)
     log_path = os.path.join(
         log_dir, "gimbal_pid_log_{0}.csv".format(datetime.now().strftime("%Y%m%d_%H%M%S")))
     logger = ResponseLogger(log_path)
