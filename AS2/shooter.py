@@ -1240,18 +1240,18 @@ class TargetHunter:
             return None, inc
         return deskew_shape(det.get("aspect"), inc), inc
 
-    def _close_at(self, ang, walls, force_fire=False):
+    def _close_at(self, ang, walls, force_fire=False, only=None):
         """force_fire: รอบ 2/เก็บตก ยิงซ้ำแบบที่รอบ 1 ยิงได้ (ไม่เข้าคิวถอย) ; ก้มดูกำแพงชิด: ขยายขอบบนของพื้นที่ตรวจ (roi.y0) เป็น CLOSE_ROI_Y0 ระหว่างนี้เท่านั้น
         (ภาพกล้องจริง 1/10: ก้ม -15..-22 ป้ายระยะ 25-35 ซม. ขยับขึ้นไปทับเส้น roi.y0=0.4 แล้วถูกตัดทิ้ง)"""
         roi = self.S.setdefault("roi", {})
         y0 = roi.get("y0", 0.0)
         roi["y0"] = min(y0, C.CLOSE_ROI_Y0)
         try:
-            return self._close_at_inner(ang, walls, force_fire)
+            return self._close_at_inner(ang, walls, force_fire, only)
         finally:
             roi["y0"] = y0
 
-    def _close_at_inner(self, ang, walls, force_fire=False):
+    def _close_at_inner(self, ang, walls, force_fire=False, only=None):
         """หันมุมโลก ang ก้ม CLOSE_PITCH_DEG -> ป้ายเป้าบนกำแพง (ทิศใน walls) ของช่องนี้ ระยะ CLOSE_SHOOT_CM ที่เห็นนิ่ง
         -> ล็อค -> ตรวจ -> ยิง ; คืน True ถ้ายิง ; เฟรมแรกไม่เห็นป้ายบนกำแพงเลย -> ไปมุมถัดไปทันที (ประหยัดเวลา)"""
         walls = [walls] if isinstance(walls, int) else list(walls)
@@ -1297,6 +1297,8 @@ class TargetHunter:
                     t = self._observe(det, x, y, rc, cam_xy, shape_vote=(shp, True))
                     seen_any.append(f"{det['color']}/{shp}@{det['dist_cm']:.0f}")
                 want = t["spec"] or (retreat and self.color_spec(t["color"]))
+                if only is not None and t["id"] != only["id"]:
+                    want = False    # รอบ 2 ยิงซ้ำเป้านี้เท่านั้น (sim seed 2: มุมสำรองไปยิงป้ายข้างๆ ผิดเป้า)
                 if t["id"] in seen or not want or self.done(t):
                     continue
                 seen.add(t["id"])
@@ -1614,13 +1616,13 @@ def run_shoot_plan(explorer, hunter, targets, relaxed=True, min_views=None, dead
         hunter.trust = (tuple(cell), d)
         if not hunter.done(t):
             if t.get("close_ang") is not None and list(cell) == list(t.get("shot_from") or []):
-                hunter._close_at(t["close_ang"], d, force_fire=True)      # รอบ 1 ยิงได้จากช่องตัวเองแบบก้มเฉียง -> ทำซ้ำ
+                hunter._close_at(t["close_ang"], d, force_fire=True, only=t)      # รอบ 1 ยิงได้จากช่องตัวเองแบบก้มเฉียง -> ทำซ้ำ
                 for off in C.CLOSE_ANGLES:
                     # มุมเดิมไม่เห็น (ยืนต่างจากรอบ 1 นิดหน่อย) -> ลองมุมเฉียงอีกข้างของกำแพงเดียวกันก่อนยอมแพ้
                     a = (d * 90.0 + off) % 360.0
                     if hunter.done(t) or hunter.aimer.stopped() or abs((a - t["close_ang"] + 180) % 360 - 180) < 1:
                         continue
-                    hunter._close_at(a, d, force_fire=True)
+                    hunter._close_at(a, d, force_fire=True, only=t)
                 hunter.io.point_dir(r.body_heading)
             else:
                 mv = hunter.approach(t, d)

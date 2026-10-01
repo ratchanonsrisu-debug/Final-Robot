@@ -388,6 +388,7 @@ class RealRobot:
         ว่าไปถึงแล้วก่อนคืนค่า - ไม่เชื่อ wait_for_completed() เพียงอย่างเดียว เพราะเคยสงสัย
         ว่าค่า ToF ที่อ่านได้ "เร็ว/ผิดปกติ" อาจเกิดจากเริ่มอ่านตั้งแต่ gimbal ยังหมุนไม่หยุดจริง
         """
+        self._safe_sweep(yaw, pitch)
         # ลองสั่งได้ 2 ครั้ง: log 30/9 16:56 สั่ง yaw=90 แต่ gimbal ค้างที่ 1° -> ToF "E" อ่านระยะทิศ N ไปจัดกึ่งกลางผิดแกน
         for attempt in range(attempts):
             try:
@@ -404,6 +405,34 @@ class RealRobot:
             self.log(f"[gimbal] สั่งไป yaw={yaw:.0f} แต่มุมจริงยังไม่ถึง (อ่านได้ {self._gimbal_yaw:.1f}°) "
                      f"{'-> สั่งซ้ำ' if attempt < attempts - 1 else '- ไปต่อ ค่าที่ได้อาจไม่แม่น'}")
         return False
+
+    def _safe_sweep(self, yaw, pitch):
+        """ก้มอยู่/จะก้ม แล้วต้องหันไกล -> ยก gimbal ขึ้น GIMBAL_PITCH ที่มุมเดิมก่อน แล้วหันที่ระดับนั้น
+        (ท่าก้มต่อจาก _goto_gimbal ที่ปลายทาง) ; log 1/10 08:17: ก้ม -15 หัน 45->135 ลำกล้องกวาดผ่าน Sharp ขวา
+        เกี่ยวค้างที่ 47° แล้วตัวถังบิด 46° ระหว่างเดินต่อ"""
+        safe = C.GIMBAL_PITCH - 3.0
+        cur_y, cur_p = self._gimbal_yaw, self._gimbal_pitch
+        if abs(yaw - cur_y) <= C.GIMBAL_SAFE_TURN_DEG or min(pitch, cur_p) >= safe:
+            return
+        try:
+            if cur_p < safe:
+                self._ep.gimbal.moveto(pitch=C.GIMBAL_PITCH, yaw=round(cur_y, 1),
+                                       yaw_speed=C.GIMBAL_YAW_SPEED).wait_for_completed(timeout=2.0)
+            if pitch < safe:
+                self._ep.gimbal.moveto(pitch=C.GIMBAL_PITCH, yaw=yaw,
+                                       yaw_speed=C.GIMBAL_YAW_SPEED).wait_for_completed(timeout=4.0)
+        except Exception as e:                              # noqa: BLE001
+            self.log(f"[gimbal] ยกก่อนหันไม่สำเร็จ: {e}")
+
+    def _twisted(self, yaw_start):
+        """มุมตัวถังเปลี่ยนจากตอนเริ่มเดิน/shift เกิน YAW_TWIST_ABORT_DEG -> คืนค่ามุม (ไม่งั้น None)"""
+        dy = _ang_diff(yaw_start, self._yaw)
+        return dy if abs(dy) > C.YAW_TWIST_ABORT_DEG else None
+
+    def _halt_twist(self, where, dy):
+        self.halt = (f"ตัวถังหมุนเอง {abs(dy):.0f}° ระหว่าง {where} (gimbal เกี่ยว Sharp/โดนชน?) -> หยุดล้อ หยุดสำรวจ "
+                     f"กันเดินเฉียงชน ; จัดหุ่นให้ตรงแล้วเริ่มใหม่")
+        self.log("[chassis] !! " + self.halt)
 
     @staticmethod
     def _interpret_tof(raw):
@@ -571,6 +600,7 @@ class RealRobot:
     def reset_heading_ref(self):
         """ใช้มุมตอนนี้เป็นทิศอ้างอิง (เรียกตอนเริ่มสำรวจ - ผู้ใช้วางหุ่นตรงกับกริดแล้ว)"""
         self.ensure_free_mode()
+        self.halt = None
         self._yaw0 = self._yaw
         self._yaw_start = self._yaw
         self._body_start = self.body_heading
@@ -740,6 +770,8 @@ class RealRobot:
         try:
             t0 = time.time()
             start = self._pos
+            yaw_start = self._yaw
+            twist = None
             lim = math.hypot(bx, by) + C.SHIFT_RUNAWAY_MM / 1000.0
             act = self._ep.chassis.move(x=bx, y=C.STRAFE_SIGN * by, z=0, xy_speed=speed, z_speed=C.Z_SPEED)
             ok, runaway = False, 0.0
@@ -750,11 +782,15 @@ class RealRobot:
                     ok = True
                     break
                 runaway = math.hypot(self._pos[0] - start[0], self._pos[1] - start[1])
-                if runaway > lim:
+                twist = self._twisted(yaw_start)
+                if runaway > lim or twist is not None:
                     break
             if not ok:
                 act.wait_for_completed(timeout=0.01)        # ให้ SDK ปิด action นี้ (ไม่ค้างขวางคำสั่งถัดไป)
-            if runaway > lim:
+            if twist is not None:
+                self._stop_chassis()
+                self._halt_twist(name, twist)
+            elif runaway > lim:
                 self.log(f"[chassis] {name} !! หุ่นขยับไป {runaway * 1000:.0f}mm เกินที่สั่ง "
                          f"{math.hypot(bx, by) * 1000:.0f}mm -> หยุดล้อทันที")
                 self._stop_chassis()
@@ -892,11 +928,18 @@ class RealRobot:
         integ, last_loop = C.CL_SLIP_MEMORY * self._slip_i.get(d, 0.0), time.time()
         self._calib_sharp(side_walls)
         hist = []                                     # ToF หน้าล่าสุด (ใช้ค่าน้อยสุด กันค่าหน่วง)
+        yaw_start = self._yaw
         try:
             while True:
                 now = time.time()
                 if now > deadline:
                     why = "หมดเวลา"
+                    break
+                twist = self._twisted(yaw_start)
+                if twist is not None:
+                    why = f"ตัวถังหมุนเอง {abs(twist):.0f}°"
+                    self._stop_chassis()
+                    self._halt_twist(f"เดิน {DIRS[d]}", twist)
                     break
                 # --- ระยะที่เดินได้ (odometry) ---
                 moved = self._body_progress_world(start, ux, uy) * 1000.0 / odo_k

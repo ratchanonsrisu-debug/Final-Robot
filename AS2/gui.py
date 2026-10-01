@@ -716,7 +716,26 @@ class App:
             if sides == 2 and disagree == 2:
                 self.log(f"[CALIBRATE] !! ToF ซ้าย/ขวาขัดกับ Sharp ทั้งสองฝั่ง = gimbal น่าจะหันสลับด้าน "
                          f"-> ลองตั้ง GIMBAL_RIGHT_YAW = {-C.GIMBAL_RIGHT_YAW} ใน config.py")
+            self._calib_close_sweep()
         self.run_bg(job, "CALIBRATE")
+
+    def _calib_close_sweep(self):
+        """ทดสอบท่าก้มดูกำแพงชิด (เหมือนตอนสำรวจ): หันเฉียง ±45/±135 ก้ม CLOSE_PITCH_DEG ทีละมุม ค้างให้ดูด้วยตา
+        ว่าลำกล้องโดน Sharp/adaptor ไหม (ยกก่อนหัน ก้มที่ปลายทาง ตาม _safe_sweep)"""
+        io = getattr(self.hunter, "io", None)
+        if self.robot_kind != "real" or io is None or not hasattr(io, "point_angle"):
+            return
+        r = self.robot
+        self.log(f"[CALIBRATE] ทดสอบท่าก้มดูกำแพงชิด ก้ม {C.CLOSE_PITCH_DEG:.0f}° (ดูว่าลำกล้องโดน Sharp ไหม)")
+        for rel in (-45, -135, 45, 135):
+            if self.stop_event.is_set():
+                break
+            ok = io.point_angle(r.body_heading * 90.0 + rel, C.CLOSE_PITCH_DEG)
+            time.sleep(1.5)
+            self.log(f"[CALIBRATE]   เฉียง {rel:+d}° -> gimbal yaw {r._gimbal_yaw:+.1f}° pitch {r._gimbal_pitch:+.1f}° "
+                     + ("ถึง" if ok else "!! ไม่ถึง (ติด?)"))
+        io.point_dir(r.body_heading)
+        self.log(f"[CALIBRATE]   กลับหน้า -> gimbal yaw {r._gimbal_yaw:+.1f}° pitch {r._gimbal_pitch:+.1f}°")
 
     # ---------------------------------------------------------------- click
     def _geom(self):

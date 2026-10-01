@@ -93,6 +93,8 @@ class Explorer:
             robot.on_look = None
 
     def stopped(self):
+        if getattr(self.r, "halt", None):
+            return True             # หุ่นสั่งหยุดเอง (ตัวถังบิดระหว่างเดิน) - ห้ามเดินต่อ
         return self.stop is not None and self.stop.is_set()
 
     # ------------------------------------------------------------ SENSE+MAP+LOCALIZE
