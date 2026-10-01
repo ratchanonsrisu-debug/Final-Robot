@@ -60,9 +60,23 @@ class GridMap:
         k, a, b = self._edge_ref(x, y, d)
         return self.Hz[a][b] if k == "H" else self.V[a][b]
 
-    def set_lo(self, x, y, d, val):
+    def mark_passed(self, x, y, d):
+        """หุ่นเดินผ่านขอบนี้มาแล้วจริง (ถึงช่องใหม่ยืนยันแล้ว) -> โล่งแน่ ค่าเซนเซอร์ทีหลังห้ามเปลี่ยนเป็นกำแพง
+        (log 1/10 06:34: หุ่นเยื้องที่ (5,5) อ่าน ToF W 415 / Sharp 190 -> ใส่กำแพง (4,5)|(5,5) ที่เพิ่งเดินผ่านมา
+        -> กลับบ้านไม่ได้ แผนที่ผิดครึ่งสนาม)"""
+        if not hasattr(self, "passed"):
+            self.passed = set()
+        self.passed.add(self._edge_ref(x, y, d))
+        self.set_lo(x, y, d, -C.L_CLAMP, force=True)
+
+    def is_passed(self, x, y, d):
+        return self._edge_ref(x, y, d) in getattr(self, "passed", ())
+
+    def set_lo(self, x, y, d, val, force=False):
         k, a, b = self._edge_ref(x, y, d)
         val = max(-C.L_CLAMP, min(C.L_CLAMP, val))
+        if not force and (k, a, b) in getattr(self, "passed", ()) and val > -C.L_WALL_TH:
+            return                  # ขอบที่เดินผ่านมาแล้ว: ไม่รับค่าที่จะทำให้ไม่โล่ง
         if k == "H":
             self.Hz[a][b] = val
         else:
@@ -88,8 +102,9 @@ class GridMap:
         return UNKNOWN
 
     def set_state(self, x, y, d, st):
-        """แก้ด้วยมือ (manual edit)"""
-        self.set_lo(x, y, d, {WALL: C.L_CLAMP, OPEN: -C.L_CLAMP, UNKNOWN: 0.0}[st])
+        """แก้ด้วยมือ (manual edit) ; แก้มือชนะเสมอ (ล้างสถานะ "เดินผ่านแล้ว" ของขอบนี้)"""
+        getattr(self, "passed", set()).discard(self._edge_ref(x, y, d))
+        self.set_lo(x, y, d, {WALL: C.L_CLAMP, OPEN: -C.L_CLAMP, UNKNOWN: 0.0}[st], force=True)
 
     def can_move(self, x, y, d, allow_unknown=False):
         d = dir_index(d)

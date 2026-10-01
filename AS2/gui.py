@@ -15,6 +15,7 @@ import datetime
 import os
 import queue
 import threading
+import faulthandler
 import traceback
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -45,6 +46,11 @@ class App:
         self._session_log_path = os.path.join(
             HERE, C.OUTPUT_DIR, "gui_session_" + datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + ".log")
         self._session_log_file = open(self._session_log_path, "w", encoding="utf-8")
+        try:
+            # โปรแกรมพังแบบ native (access violation) -> เขียน stack ทุก thread ลง session log ก่อนตาย
+            faulthandler.enable(file=self._session_log_file, all_threads=True)
+        except Exception:                                   # noqa: BLE001
+            pass
         self.robot = None
         self.explorer = None
         self.logger = None
@@ -180,16 +186,165 @@ class App:
         ttk.Entry(r2, textvariable=self.v_tiles, width=5).pack(side=tk.LEFT, padx=2)
         ttk.Button(f5, text="🎯 รอบ 2: ไปยิงเป้าที่บันทึกไว้", command=self.start_round2).pack(fill=tk.X, pady=(4, 0))
         ttk.Button(f5, text="สแกน+ยิงเป้าที่เห็นตรงนี้", command=self.scan_here).pack(fill=tk.X)
+        self.v_cam = tk.BooleanVar(value=False)
+        ttk.Checkbutton(f5, text="📷 หน้าต่างภาพกล้อง (ให้ผู้ชมดู)", variable=self.v_cam,
+                        command=self._toggle_cam).pack(anchor="w", pady=(4, 0))
+        self.cam_win = None
 
         # ---- canvas + log ----
         self.status = tk.StringVar(value="พร้อม")
-        ttk.Label(right, textvariable=self.status, font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        top = ttk.Frame(right); top.pack(fill=tk.X)
+        # นาฬิการอบ: เริ่มนับตอนกด "เริ่มสำรวจ" (รอบ 1, จำกัด 10 นาที) / "รอบ 2" (จำกัด 5 นาที) หยุดเมื่อจบ
+        self.v_timer = tk.StringVar(value="⏱ --:--")
+        self.lbl_timer = tk.Label(top, textvariable=self.v_timer, font=("Consolas", 18, "bold"),
+                                  fg="#555", padx=8)
+        self.lbl_timer.pack(side=tk.LEFT)
+        self._timer = {"name": None, "t0": None, "t1": None, "limit": None}
+        ttk.Label(top, textvariable=self.status, font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, anchor="w")
         self.cv = tk.Canvas(right, width=CANVAS, height=CANVAS, bg="white", highlightthickness=1,
                             highlightbackground="#bbb")
         self.cv.pack()
         self.cv.bind("<Button-1>", self.on_click)
         self.logbox = ScrolledText(right, height=9, font=("Consolas", 9))
         self.logbox.pack(fill=tk.BOTH, expand=True, pady=(6, 0))
+
+    # ================================================================ หน้าต่างภาพกล้อง
+    def _toggle_cam(self):
+        """หน้าต่างแยก (ลากไปจอโปรเจกเตอร์/ขยายได้): ภาพกล้องหุ่น + กรอบป้ายที่ตรวจเจอ + หุ่นกำลังทำอะไร
+        วาดใน thread หน้าจอ ~7 ภาพ/วิ จากภาพที่ถอดรหัสไว้แล้ว (ไม่ถอดรหัส/ไม่ตรวจป้ายเพิ่ม)"""
+        if self.v_cam.get() and self.cam_win is None:
+            w = tk.Toplevel(self.root)
+            w.title("ภาพกล้องหุ่น")
+            w.geometry("660x440")
+            w.protocol("WM_DELETE_WINDOW", lambda: (self.v_cam.set(False), self._toggle_cam()))
+            self.v_cam_txt = tk.StringVar(value="")
+            # แถบสถานะ pack ก่อน (ติดล่างเสมอ) ไม่งั้นภาพใหญ่ดันแถบหายตอนย่อหน้าต่าง
+            # ปรับมุม gimbal เอง (ตอนหุ่นว่าง) ไว้หามุมก้มดูกำแพงชิดที่เห็นป้ายชัดแต่ไม่ชน adaptor
+            ctl = tk.Frame(w)
+            ctl.pack(side=tk.BOTTOM, fill=tk.X, padx=4, pady=2)
+            tk.Label(ctl, text="ก้ม/เงย:").pack(side=tk.LEFT)
+            for p in (0, -5, -8, -10, -12, -15):
+                tk.Button(ctl, text=f"{p}°", width=4,
+                          command=lambda p=p: self._cam_gimbal(pitch=float(p))).pack(side=tk.LEFT)
+            tk.Button(ctl, text="▲1°", command=lambda: self._cam_gimbal(dpitch=1.0)).pack(side=tk.LEFT, padx=(6, 0))
+            tk.Button(ctl, text="▼1°", command=lambda: self._cam_gimbal(dpitch=-1.0)).pack(side=tk.LEFT)
+            tk.Label(ctl, text="  หัน:").pack(side=tk.LEFT)
+            for yv, txt in ((-135, "◀135°"), (-45, "◀45°"), (-30, "◀30°"), (0, "หน้า"), (30, "30°▶"), (45, "45°▶"),
+                            (135, "135°▶")):
+                tk.Button(ctl, text=txt, command=lambda yv=yv: self._cam_gimbal(yaw=float(yv))).pack(side=tk.LEFT)
+            tk.Button(ctl, text="✔ ใช้มุมก้มนี้", bg="#c8e6c9",
+                      command=self._cam_use_pitch).pack(side=tk.RIGHT)
+            tk.Label(w, textvariable=self.v_cam_txt, font=("Segoe UI", 13, "bold"), fg="#0d47a1",
+                     anchor="w").pack(side=tk.BOTTOM, fill=tk.X, padx=6)
+            self.cam_img = tk.Label(w, bg="#111")
+            self.cam_img.pack(fill=tk.BOTH, expand=True)
+            self.cam_win = w
+            self._cam_tick()
+        elif not self.v_cam.get() and self.cam_win is not None:
+            self.cam_win.destroy()
+            self.cam_win = None
+
+    def _cam_gimbal(self, pitch=None, yaw=None, dpitch=0.0, dyaw=0.0):
+        r = self.robot
+        if r is None or not hasattr(r, "_goto_gimbal"):
+            self.log("[cam] ปรับ gimbal ได้เฉพาะหุ่นจริงที่เชื่อมต่อแล้ว")
+            return
+        if self.busy():
+            self.log("[cam] หุ่นกำลังทำงาน - กด Stop ก่อนค่อยปรับ gimbal เอง")
+            return
+        # จำมุมที่สั่งไว้ (ไม่ใช้มุมที่วัดได้ซึ่งคลาด ~0.5° -> กดหลายครั้งแล้วค่อยๆ ก้มลงเอง)
+        tp, ty = getattr(self, "_cam_tgt", (r._gimbal_pitch, r._gimbal_yaw))
+        p = (tp if pitch is None else pitch) + dpitch
+        y = (ty if yaw is None else yaw) + dyaw
+        self._cam_tgt = (p, y)
+        # สั่งใน thread แยก (moveto รอเสร็จได้หลายวินาที ห้ามค้างหน้าจอ)
+        threading.Thread(target=lambda: r._goto_gimbal(y, p, attempts=1, extra_wait_s=0.8), daemon=True).start()
+
+    def _cam_use_pitch(self):
+        r = self.robot
+        if r is None or not hasattr(r, "_gimbal_pitch"):
+            return
+        p = round(float(getattr(self, "_cam_tgt", (r._gimbal_pitch, 0))[0]), 1)
+        C.CLOSE_PITCH_DEG = p
+        self.log(f"[cam] ตั้งมุมก้มดูกำแพงชิด = {p}° (ใช้ทันทีรอบนี้) -> ให้ถาวร: แก้ config.py เป็น "
+                 f"CLOSE_PITCH_DEG = {p}")
+
+    def _cam_tick(self):
+        if self.cam_win is None:
+            return
+        try:
+            self._cam_draw()
+        except Exception as e:                              # noqa: BLE001
+            if not getattr(self, "_cam_err", False):
+                self._cam_err = True
+                self.log(f"[gui] วาดภาพกล้องพลาด (ข้ามเฟรม): {e!r}")
+        finally:
+            if self.cam_win is not None:
+                self.root.after(140, self._cam_tick)
+
+    def _cam_draw(self):
+        import cv2
+        from PIL import Image, ImageTk
+        h = self.hunter
+        if h is None:
+            self.v_cam_txt.set("ยังไม่ได้เชื่อมต่อกล้อง (กด Apply / เชื่อมต่อหุ่น)")
+            return
+        now = time.time()
+        view = h.view
+        live = h.io.peek() if hasattr(h.io, "peek") else None
+        rb = self.robot
+        close_view = rb is not None and getattr(rb, "_gimbal_pitch", 0.0) <= C.CLOSE_PITCH_DEG + 3.0
+        roi = h.S.setdefault("roi", {})
+        roi_y0 = roi.get("y0", 0.0)
+        if live is not None and not self.busy() and now - view["t"] > 0.3:
+            # หุ่นว่าง (ไม่ได้สำรวจ/ยิง): ตรวจป้ายบนภาพสด ~3 ครั้ง/วิ ให้เห็นกรอบป้ายค้างไว้ (ไว้ดู/แคปจอ ตรวจว่าป้ายไหนหลุด)
+            # ก้มใกล้มุมก้มดูกำแพงชิด -> ใช้ขอบบนแบบเดียวกับตอนก้มดูจริง (CLOSE_ROI_Y0)
+            if close_view:
+                roi["y0"] = min(roi_y0, C.CLOSE_ROI_Y0)
+            try:
+                h.det.detect(live)
+            finally:
+                roi["y0"] = roi_y0
+            view = h.view
+        frame = live if live is not None else view["frame"]
+        if frame is None:
+            self.v_cam_txt.set("รอภาพจากกล้อง ...")
+            return
+        W = max(320, self.cam_img.winfo_width() - 4)
+        Hh = max(180, self.cam_img.winfo_height() - 4)
+        fh, fw = frame.shape[:2]
+        k = min(W / fw, Hh / fh)
+        img = cv2.resize(frame, (int(fw * k), int(fh * k)), interpolation=cv2.INTER_AREA)
+        ih, iw = img.shape[:2]
+        # พื้นที่ที่ตัวตรวจป้ายไม่ดู (ROI / โซนตัดทิ้ง) = เส้นประเทา -> เห็นว่าป้ายหลุดเพราะอยู่นอกพื้นที่หรือเปล่า
+        y0_draw = min(roi_y0, C.CLOSE_ROI_Y0) if close_view else roi_y0
+        if y0_draw > 0:
+            cv2.line(img, (0, int(y0_draw * ih)), (iw, int(y0_draw * ih)), (120, 120, 120), 1)
+        for x0, y0, x1, y1 in h.S.get("exclude", []):
+            cv2.rectangle(img, (int(min(x0, x1) * iw), int(min(y0, y1) * ih)),
+                          (int(max(x0, x1) * iw), int(max(y0, y1) * ih)), (120, 120, 120), 1)
+        # ป้ายที่ตรวจล่าสุด (ถ้าเพิ่งตรวจ <0.8 วิ ; ภาพสดขยับไปแล้วไม่วาดกรอบค้าง)
+        if now - view["t"] < 0.8 and view["frame"] is not None:
+            vk = iw / float(view["frame"].shape[1])
+            for color, shape, (x, y, bw, bh), dist in view["dets"]:
+                spec = h.spec_ok(color, shape)
+                c = (0, 200, 0) if spec else (170, 170, 170)
+                p0, p1 = (int(x * vk), int(y * vk)), (int((x + bw) * vk), int((y + bh) * vk))
+                cv2.rectangle(img, p0, p1, c, 3 if spec else 1)
+                cv2.putText(img, f"{color} {shape} {dist:.0f}cm" + (" TARGET" if spec else ""),
+                            (p0[0], max(14, p0[1] - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, c, 2 if spec else 1)
+        if h.status.startswith(("เล็ง", "ยิง")):
+            cx, cy = iw // 2, ih // 2
+            cv2.line(img, (cx - 18, cy), (cx + 18, cy), (0, 0, 255), 2)
+            cv2.line(img, (cx, cy - 18), (cx, cy + 18), (0, 0, 255), 2)
+        photo = ImageTk.PhotoImage(Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)))
+        self.cam_img.configure(image=photo)
+        self.cam_img.image = photo
+        r = self.robot
+        where = f"ช่อง {r.cell} " if r is not None else ""
+        if r is not None and hasattr(r, "_gimbal_pitch"):
+            where += f"| gimbal ก้ม {r._gimbal_pitch:+.1f}° หัน {r._gimbal_yaw:+.0f}° (ก้มกำแพงชิดใช้ {C.CLOSE_PITCH_DEG:+.0f}°) "
+        self.v_cam_txt.set(f"{where}| {h.status or self.status.get()}")
 
     # ================================================================ helpers
     def log(self, s):
@@ -199,7 +354,17 @@ class App:
                 self._session_log_file.flush()
             except Exception:
                 pass
+        self._kick_watchdog()
         self.q.put(("log", s))
+
+    def _kick_watchdog(self):
+        """ระหว่างรัน: ถ้าไม่มี log ใหม่ WATCHDOG_S วินาที -> เขียน stack ของทุก thread (รวมหน้าจอ) ลง session log
+        ไว้ดูว่าค้างที่บรรทัดไหน (30/9: หน้าจอค้าง log หยุดหลัง 'frontier -> (4,3)' ไม่รู้ว่าค้างตรงไหน)"""
+        if self.busy():
+            try:
+                faulthandler.dump_traceback_later(C.WATCHDOG_S, repeat=True, file=self._session_log_file)
+            except Exception:
+                pass
 
     def _poll(self):
         try:
@@ -211,14 +376,26 @@ class App:
                     pass
                 elif kind == "done":
                     self.btn_explore.state(["!disabled"])
+                    if self._timer["t0"] and self._timer["t1"] is None:
+                        self._timer["t1"] = time.time()      # หยุดนาฬิกา แสดงเวลาที่ใช้จริงค้างไว้
+                elif kind == "spec":
+                    self._on_spec_changed()
                 elif kind == "click_goto":
                     self.v_click.set("goto")
                 elif kind == "info":
                     messagebox.showinfo("ผลลัพธ์", val)
         except queue.Empty:
             pass
-        self.redraw()
-        self.root.after(150, self._poll)
+        try:
+            self.redraw()
+        except Exception as e:                              # noqa: BLE001
+            # วาดพลาดครั้งเดียวห้ามทำให้หน้าจอหยุดอัปเดตทั้งรอบ (log 1/10: แผนที่+log ค้างจนจบรอบ ; ข้อมูลเปลี่ยน
+            # ระหว่างวาดจาก thread หุ่น) -> ข้ามเฟรมนี้ วาดใหม่รอบหน้า
+            if not getattr(self, "_redraw_err", False):
+                self._redraw_err = True
+                self.log(f"[gui] วาดแผนที่พลาด (ข้ามเฟรม): {e!r}")
+        finally:
+            self.root.after(150, self._poll)
 
     def busy(self):
         return self.worker is not None and self.worker.is_alive()
@@ -249,9 +426,24 @@ class App:
             if self.v_hunt.get():
                 hunter = self.hunter
                 hunter.set_out_dir(self.out_dir)
+        elif self.v_hunt.get() and name in ("EXPLORE", "ROUND 2"):
+            if not messagebox.askyesno("ระบบยิงไม่ทำงาน",
+                                       "ติ๊ก 'หาป้าย' ไว้ แต่ระบบกล้อง/ยิงยังไม่พร้อม (ดู log [shooter])\n\n"
+                                       "ทำต่อโดยไม่หาป้าย/ไม่ยิงเลยไหม?"):
+                return
+        if name in ("EXPLORE", "ROUND 2"):
+            self.log(f"[shooter] หาป้าย={'เปิด' if hunter and hunter.enabled else 'ปิด'} "
+                     f"ยิงจริง={'เปิด' if hunter and hunter.fire else 'ปิด'}"
+                     + (f" เป้า: {hunter.spec_text()} ระยะยิง {C.SHOOT_WINDOW_CM[0]}-{C.SHOOT_WINDOW_CM[1]} ซม."
+                        if hunter else ""))
         self.explorer = Explorer(self.robot, self.m, self.logger, stop_event=self.stop_event, echo=self.log,
                                  hunter=hunter)
         self._job_t0 = time.time()
+        limit = {"EXPLORE": 600, "ROUND 2": 300}.get(name)
+        if limit:                                        # นาฬิการอบ (งานอื่น เช่นสแกนตรงนี้ ไม่รีเซ็ต)
+            self._timer = {"name": "รอบ 1" if name == "EXPLORE" else "รอบ 2",
+                           "t0": self._job_t0, "t1": None, "limit": limit}
+        self.logger.heartbeat = self._kick_watchdog      # ทุกแถวใน exploration_log นับว่ายังไม่ค้าง
         def wrap():
             try:
                 fn()
@@ -259,10 +451,12 @@ class App:
                 self.log("ERROR: " + repr(e))
                 self.log(traceback.format_exc())
             finally:
+                faulthandler.cancel_dump_traceback_later()
                 self.q.put(("done", None))
         self.log(f"--- {name} ---")
         self.worker = threading.Thread(target=wrap, daemon=True)
         self.worker.start()
+        self._kick_watchdog()
 
     def _ensure_logger(self):
         if self.logger is None:
@@ -322,8 +516,8 @@ class App:
     def _make_hunter(self, io, sim):
         from shooter import TargetHunter, make_settings
         self.hunter = TargetHunter(io, make_settings(sim=sim), log=self.log, sim=sim)
-        self._on_spec_changed()
-        self.log(f"[shooter] พร้อม: เป้าที่ต้องยิง = {self.hunter.spec_text()}")
+        self.q.put(("spec", None))   # อาจถูกเรียกจาก thread เชื่อมต่อหุ่น -> ให้ main thread อ่านตารางติ๊กเอง
+        self.log("[shooter] พร้อม (เป้าที่ต้องยิง = ตามตารางติ๊กในกล่อง 5)")
 
     def _read_settings(self):
         w, h = int(self.v_w.get()), int(self.v_h.get())
@@ -385,8 +579,6 @@ class App:
                 try:
                     from robots import RealRobot
                     r = RealRobot(sx, sy, hd, cell, log=self.log)
-                    self.robot = r
-                    self.robot_kind = "real"
                     self.sim_targets = []
                     try:
                         from shooter import RealShooterIO
@@ -394,6 +586,10 @@ class App:
                     except Exception as e:
                         self.hunter = None
                         self.log(f"[shooter] เปิดกล้อง/blaster ไม่ได้ ({e!r}) - สำรวจได้แต่ไม่ยิง")
+                    # ตั้ง self.robot หลังระบบยิงพร้อมแล้วเท่านั้น (log 30/9 14:09: กดสำรวจระหว่างเปิดกล้อง ~3 วิ
+                    # -> สำรวจทั้งรอบโดย hunter=None ไม่หาป้าย/ไม่ยิงสักใบ และไม่มีอะไรเตือน)
+                    self.robot = r
+                    self.robot_kind = "real"
                     self.log(f"[REAL] เชื่อมต่อหุ่นจริงสำเร็จ: {w}x{h}, เริ่ม ({sx},{sy}) หัน {hd}")
                 except Exception as e:
                     self.robot = None
@@ -682,14 +878,14 @@ class App:
         # planned path
         if self.explorer and self.explorer.plan and mode != "gt":
             pts = []
-            for (x, y) in self.explorer.plan:
+            for (x, y) in list(self.explorer.plan):
                 pts += list(self._px(x + 0.5, y + 0.5))
             if len(pts) >= 4:
                 cv.create_line(*pts, fill="#42a5f5", width=4, dash=(6, 4), arrow=tk.LAST)
         # trajectory
         if self.logger and self.logger.traj and mode != "gt":
             pts = []
-            for p in self.logger.traj[-600:]:
+            for p in list(self.logger.traj[-600:]):
                 pts += list(self._px(p[1] / m.cell_m, p[2] / m.cell_m))
             if len(pts) >= 4:
                 cv.create_line(*pts, fill="#1565c0", width=2)
@@ -723,7 +919,7 @@ class App:
                    px - fx * r * 0.7 - lx * r * 0.7, py - fy * r * 0.7 - ly * r * 0.7]
             cv.create_polygon(*pts, fill="#ff7043", outline="#bf360c", width=2)
             if self.explorer and self.explorer.last_tof:
-                for d, v in self.explorer.last_tof.items():
+                for d, v in list(self.explorer.last_tof.items()):
                     if not isinstance(d, int):
                         continue
                     L = min(v, 2500) / 1000.0 / m.cell_m * s
@@ -740,6 +936,14 @@ class App:
         else:
             pos = "   (ยังไม่เชื่อมต่อหุ่น)"
         state = "  [กำลังทำงาน]" if self.busy() else ""
+        T = self._timer
+        if T["t0"]:
+            el = int((T["t1"] or time.time()) - T["t0"])
+            lim = T["limit"]
+            self.v_timer.set(f"⏱ {T['name']} {el // 60}:{el % 60:02d} / {lim // 60}:00"
+                             + ("  ✓จบ" if T["t1"] else ""))
+            # เขียว < 70% ของเวลา, ส้ม < 100%, แดง = เกินเวลา
+            self.lbl_timer.config(fg="#2e7d32" if el < 0.7 * lim else "#ef6c00" if el < lim else "#c62828")
         if self.busy() and self._job_t0:
             el = int(time.time() - self._job_t0)
             state = f"  [กำลังทำงาน {el // 60}:{el % 60:02d}]"
@@ -761,21 +965,35 @@ class App:
                 cv.create_line(px - r, py - r, px + r, py + r, fill="#999", width=2)
                 cv.create_line(px - r, py + r, px + r, py - r, fill="#999", width=2)
         if self.hunter is not None and self.hunter.targets:
-            items = self.hunter.export()
+            items = self.hunter.export(include_unconfirmed=True)   # เห็นครั้งเดียวก็โชว์ (เส้นประ)
         else:
             items = self.m.meta.get("targets", [])
         for t in items:
             px, py = self._px(t["x_m"] / m.cell_m, t["y_m"] / m.cell_m)
             fill = self.TCOL.get(t["color"], "#999")
             ow, oc = (4, "#000") if t["fired"] else (1, "#555" if t["spec"] else "#bbb")
+            kw = {} if t.get("confirmed", True) else {"dash": (2, 2), "stipple": "gray50"}
             if t["shape"] == "CIRCLE":
-                cv.create_oval(px - r, py - r, px + r, py + r, fill=fill, outline=oc, width=ow)
+                cv.create_oval(px - r, py - r, px + r, py + r, fill=fill, outline=oc, width=ow, **kw)
             else:
                 rx, ry = {"VERTICAL": (0.7, 1.0), "HORIZONTAL": (1.0, 0.7)}.get(t["shape"], (0.85, 0.85))
                 cv.create_rectangle(px - r * rx, py - r * ry, px + r * rx, py + r * ry,
-                                    fill=fill, outline=oc, width=ow)
+                                    fill=fill, outline=oc, width=ow, **kw)
             cv.create_text(px, py + r + 8, text=f"#{t['id']}" + (" ✓" if t["fired"] else ""),
                            font=("Arial", 8, "bold"), fill="#000" if t["spec"] else "#999")
+        # แผนยิง (เก็บตก/รอบ 2): เส้นจากช่องยืนยิง -> ป้าย + ลำดับ ; ใบที่กำลังไปยิง = วงแดง
+        plan = list(getattr(self.hunter, "plan", None) or []) if self.hunter is not None else []
+        for i, (t, cell, _d) in enumerate(plan):
+            px, py = self._px(t["x"] / m.cell_m, t["y"] / m.cell_m)
+            sx, sy = self._px(cell[0] + 0.5, cell[1] + 0.5)
+            first = i == 0
+            cv.create_line(sx, sy, px, py, fill="#d50000" if first else "#ff9800", width=3 if first else 1,
+                           dash=() if first else (3, 3), arrow=tk.LAST)
+            if first:
+                cv.create_oval(px - r * 1.9, py - r * 1.9, px + r * 1.9, py + r * 1.9, outline="#d50000", width=3)
+            cv.create_oval(px + r, py - r * 2.6, px + r * 2.6, py - r, fill="#d50000" if first else "#ff9800",
+                           outline="")
+            cv.create_text(px + r * 1.8, py - r * 1.8, text=str(i + 1), fill="#fff", font=("Arial", 8, "bold"))
 
     def _draw_edge(self, g, x, y, d, mode):
         if d == 0:

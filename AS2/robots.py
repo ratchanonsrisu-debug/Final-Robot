@@ -126,7 +126,9 @@ class SimRobot:
         return out
 
     # ---------- movement ----------
-    def move_cell(self, d):
+    def move_cell(self, d, dist_m=None):
+        # odometry จำลอง = ระยะที่สั่ง (ช่วงเร็ว) + ที่ shift ตามแนวเดิน ; ตำแหน่งจริงจำลองยังลงกลางช่อง + noise
+        self._move_d, self._along = d, (dist_m if dist_m is not None else self.cell_m)
         time.sleep(C.SIM_STEP_DELAY_S)
         nx, ny = self.cell[0] + DX[d], self.cell[1] + DY[d]
         self.cell = (nx, ny)
@@ -137,7 +139,14 @@ class SimRobot:
     def correct_yaw(self):
         self._yaw = 0.0
 
-    def shift(self, dx, dy):
+    def drive_cell(self, d, dist_m, lat_dir=None, odo_k=1.0, side_walls=None, front_wall=False):
+        """จำลอง: เหมือน move_cell (ไม่มีล้อลื่นให้คุม)"""
+        self.move_cell(d, dist_m)
+
+    def shift(self, dx, dy, speed=None):
+        d = getattr(self, "_move_d", None)
+        if d is not None:
+            self._along += dx * DX[d] + dy * DY[d]
         time.sleep(0.02)
 
     def reset_heading_ref(self):
@@ -145,6 +154,20 @@ class SimRobot:
 
     def undo_last_move(self):
         pass                    # จำลอง: move_cell สำเร็จเสมอ ไม่มีอะไรต้องย้อน
+
+    def moved_along(self, d):
+        md = getattr(self, "_move_d", None)
+        if md is None:
+            return None
+        if d == md:
+            return self._along
+        return -self._along if d == (md + 2) % 4 else 0.0
+
+    def moved_lateral(self, d):
+        return 0.0              # จำลอง: ไม่เยื้องด้านข้าง
+
+    def recover_chassis(self):
+        pass
 
     def face(self, heading):
         self._yaw = 0.0
@@ -188,13 +211,17 @@ class RealRobot:
         self.on_look = None
         self._att_n = 0         # จำนวน callback attitude/position ที่ได้รับแล้ว
         self._pos_n = 0
+        self._tof_n = 0
+        self._ang_n = 0
         self._move_start = None  # odometry ตอนเริ่ม move_cell ล่าสุด (ใช้ undo_last_move)
+        self._move_start_pos = None  # เหมือนกันแต่ไม่ถูกล้างตอน undo (ใช้ moved_along)
         #: bool: True = อ่าน Sharp ไม่ได้ (สาย/พอร์ตผิด) -> ใช้ ToF อย่างเดียว
         self._sharp_off = False
 
         self.log("[robot] กำลังเชื่อมต่อ RoboMaster (AP mode) ...")
         self._ep = robot.Robot()
         self._ep.initialize(conn_type="ap")
+        self.ensure_free_mode()
         self._ep.gimbal.sub_angle(freq=20, callback=self._on_gimbal_angle)
         time.sleep(0.2)
         self._ep.gimbal.recenter().wait_for_completed()
@@ -204,9 +231,9 @@ class RealRobot:
         #: ต้องวัดจริงจากหุ่นแต่ละตัว ไม่งั้นทิศ E/W ที่สแกนได้จะสลับซ้าย-ขวากัน)
         self.gimbal_yaw_sign = self._calibrate_gimbal_yaw_sign()
 
-        self._ep.sensor.sub_distance(freq=10, callback=self._on_tof)
-        self._ep.chassis.sub_attitude(freq=10, callback=self._on_attitude)
-        self._ep.chassis.sub_position(freq=10, callback=self._on_position)
+        self._ep.sensor.sub_distance(freq=C.TOF_FREQ, callback=self._on_tof)
+        self._ep.chassis.sub_attitude(freq=C.CHASSIS_FREQ, callback=self._on_attitude)
+        self._ep.chassis.sub_position(freq=C.CHASSIS_FREQ, callback=self._on_position)
         # รอให้ IMU/odometry ส่งค่าแรกมาจริงก่อนเก็บจุดอ้างอิง (log 27/9 20:46: รอแค่ 0.3s
         # แล้ว callback ยังไม่มา -> _yaw0 = 0 ทั้งที่หุ่นอยู่ -92.7 -> correct_yaw หมุนแก้ 30 องศา
         # ทุกก้าวจนเดินเฉียงชนกำแพง)
@@ -224,12 +251,51 @@ class RealRobot:
         self.log("[robot] เชื่อมต่อสำเร็จ พร้อมใช้งาน")
 
     # ---------- callbacks (เธรดของ DDS) ----------
+    # ทุก callback นับจำนวนครั้ง (*_n) ไว้ -> โค้ดที่อ่านค่าหลังสั่งเคลื่อนที่ "รอค่าใหม่" จริง ไม่ใช่ sleep ตายตัว
+    # (AS2 เปิดวิดีโอกล้องด้วย: log 30/9 ค่า ToF/IMU มาช้า -> ToF ทิศ S อ่านได้ค่าของทิศ E ที่อ่านก่อนหน้า
+    #  E=3000 9/14 ช่อง ทั้งที่ SLAM เดิม (ไม่เปิดกล้อง) เป็น 0)
     def _on_tof(self, info):
         self._tof = list(info)
+        self._tof_n += 1
 
     def _on_gimbal_angle(self, info):
         self._gimbal_pitch = info[0]
         self._gimbal_yaw = info[1]
+        self._ang_n += 1
+
+    def _wait_fresh(self, attr, n=2, timeout=1.0):
+        """รอ callback ใหม่ของ attr ("_tof_n"/"_att_n"/"_pos_n"/"_ang_n") อีก n ครั้ง -> True ถ้าได้ทันเวลา"""
+        target = getattr(self, attr) + n
+        deadline = time.time() + timeout
+        while getattr(self, attr) < target:
+            if time.time() > deadline:
+                return False
+            time.sleep(0.005)
+        return True
+
+    def _wait_still(self, timeout=None, tol_m=0.003, n=3):
+        """รอจน odometry นิ่ง (ค่าใหม่ n ครั้งติดกันขยับ < tol_m) = หุ่นหยุดจริง -> ระยะ (เมตร) ที่ไหลไประหว่างรอ
+        (log 30/9 14:11: chassis.move รายงานเสร็จแล้วหุ่นยังไหลต่อ 110-140mm ก่อนอ่าน ToF -> ชนกำแพง/ตำแหน่งผิด)"""
+        start = self._pos
+        last_n, last = self._pos_n, self._pos
+        still = 0
+        deadline = time.time() + (C.STILL_TIMEOUT_S if timeout is None else timeout)
+        while time.time() < deadline:
+            if self._pos_n != last_n:
+                last_n, p = self._pos_n, self._pos
+                still = still + 1 if math.hypot(p[0] - last[0], p[1] - last[1]) < tol_m else 0
+                last = p
+                if still >= n:
+                    break
+            time.sleep(0.005)
+        return math.hypot(self._pos[0] - start[0], self._pos[1] - start[1])
+
+    def rates(self, sec=1.0):
+        """Hz ของข้อมูลแต่ละชนิดในช่วง sec วินาที (ใช้ตรวจว่าเปิดกล้องแล้วข้อมูลเซนเซอร์ช้าลงไหม)"""
+        keys = ("_tof_n", "_att_n", "_pos_n", "_ang_n")
+        a = [getattr(self, k) for k in keys]
+        time.sleep(sec)
+        return {k[1:-2]: (getattr(self, k) - v) / sec for k, v in zip(keys, a)}
 
     def _on_attitude(self, info):
         self._yaw = info[0]
@@ -317,24 +383,27 @@ class RealRobot:
         rel = (d - self.body_heading) % 4
         return self.gimbal_yaw_sign * self._GIMBAL_REL_YAW[rel]
 
-    def _goto_gimbal(self, yaw, pitch, tol_deg=3.0, extra_wait_s=1.5):
+    def _goto_gimbal(self, yaw, pitch, tol_deg=3.0, extra_wait_s=1.5, attempts=2):
         """สั่ง gimbal ไปมุมเป้าหมาย แล้ว**ยืนยันจริงจาก self._gimbal_yaw** (sub_angle)
         ว่าไปถึงแล้วก่อนคืนค่า - ไม่เชื่อ wait_for_completed() เพียงอย่างเดียว เพราะเคยสงสัย
         ว่าค่า ToF ที่อ่านได้ "เร็ว/ผิดปกติ" อาจเกิดจากเริ่มอ่านตั้งแต่ gimbal ยังหมุนไม่หยุดจริง
         """
-        try:
-            self._ep.gimbal.moveto(pitch=pitch, yaw=yaw,
-                                   yaw_speed=C.GIMBAL_YAW_SPEED).wait_for_completed(timeout=4.0)
-        except Exception as e:                              # noqa: BLE001
-            self.log(f"[gimbal] moveto(yaw={yaw}) ล้มเหลว: {e}")
-            return
-        deadline = time.time() + extra_wait_s
-        while time.time() < deadline:
-            if abs(self._gimbal_yaw - yaw) <= tol_deg:
-                return
-            time.sleep(0.03)
-        self.log(f"[gimbal] สั่งไป yaw={yaw:.0f} แต่มุมจริงยังไม่นิ่ง (อ่านได้ {self._gimbal_yaw:.1f}°) "
-                 f"- จะอ่าน ToF ต่อไปเลย ค่าที่ได้อาจไม่แม่น")
+        # ลองสั่งได้ 2 ครั้ง: log 30/9 16:56 สั่ง yaw=90 แต่ gimbal ค้างที่ 1° -> ToF "E" อ่านระยะทิศ N ไปจัดกึ่งกลางผิดแกน
+        for attempt in range(attempts):
+            try:
+                self._ep.gimbal.moveto(pitch=pitch, yaw=yaw,
+                                       yaw_speed=C.GIMBAL_YAW_SPEED).wait_for_completed(timeout=4.0)
+            except Exception as e:                          # noqa: BLE001
+                self.log(f"[gimbal] moveto(yaw={yaw}) ล้มเหลว: {e}")
+                continue
+            deadline = time.time() + extra_wait_s
+            while time.time() < deadline:
+                if abs(self._gimbal_yaw - yaw) <= tol_deg:
+                    return True
+                time.sleep(0.03)
+            self.log(f"[gimbal] สั่งไป yaw={yaw:.0f} แต่มุมจริงยังไม่ถึง (อ่านได้ {self._gimbal_yaw:.1f}°) "
+                     f"{'-> สั่งซ้ำ' if attempt < attempts - 1 else '- ไปต่อ ค่าที่ได้อาจไม่แม่น'}")
+        return False
 
     @staticmethod
     def _interpret_tof(raw):
@@ -360,11 +429,31 @@ class RealRobot:
         pitch = C.GIMBAL_PITCH_SIDE if rel in (1, 3) else C.GIMBAL_PITCH
         self._goto_gimbal(yaw, pitch)
         time.sleep(C.TOF_SETTLE_S)
-        samples = []
-        for _ in range(C.TOF_SAMPLES):
-            samples.append(self._interpret_tof(self._tof[C.TOF_INDEX]))
-            time.sleep(0.03)
+        samples, stable = self._fresh_tof_samples()
+        if not stable:
+            self.log(f"[tof] ทิศ {DIRS[d]} ค่าไม่นิ่ง/มาไม่ทัน {[round(v) for v in samples]} - ใช้ค่ากลาง")
         return float(statistics.median(samples)), samples
+
+    def _fresh_tof_samples(self):
+        """อ่าน ToF เฉพาะค่าที่ "มาใหม่" หลัง gimbal หยุด (นับ callback) จนได้ TOF_SAMPLES ค่าที่นิ่ง
+        (ตัดค่าสูงสุด/ต่ำสุดแล้วห่างกัน ≤ max(TOF_STABLE_MM, 6%)) ; ค่าที่ค้างมาจากตอน gimbal ยังหมุน
+        จะไม่นิ่ง -> ถูกเลื่อนทิ้งไปเอง  -> (ตัวอย่าง, นิ่งไหม)"""
+        n = C.TOF_SAMPLES
+        got, last = [], self._tof_n
+        deadline = time.time() + C.TOF_FRESH_TIMEOUT_S
+        while time.time() < deadline:
+            if self._tof_n != last:
+                last = self._tof_n
+                got.append(self._interpret_tof(self._tof[C.TOF_INDEX]))
+                if len(got) >= n:
+                    tail = sorted(got[-n:])
+                    core = tail[1:-1] if n >= 4 else tail
+                    if core[-1] - core[0] <= max(C.TOF_STABLE_MM, 0.06 * statistics.median(tail)):
+                        return got[-n:], True
+            time.sleep(0.005)
+        if not got:                     # ไม่มีค่าใหม่มาเลย -> ใช้ค่าล่าสุดที่มี
+            got = [self._interpret_tof(self._tof[C.TOF_INDEX])]
+        return got[-n:], False
 
     def read_dir(self, d):
         median, _ = self._sample_dir(d)
@@ -451,6 +540,7 @@ class RealRobot:
         เวอร์ชันนี้จึงแก้ได้แค่ครั้งละไม่เกิน YAW_CORRECT_MAX_DEG และถ้าแก้แล้วเบี้ยวขึ้น จะแค่
         หยุดรอบนี้ไว้ก่อน (ไม่หมุนซ้ำทันที) ให้รอบถัดไปอ่านค่าสดใหม่มาตัดสินใจแทน
         """
+        self._wait_fresh("_att_n", 2, 1.0)          # มุมหลังเดิน/หมุนล่าสุดต้องเป็นค่าใหม่
         err = _ang_diff(self._yaw0, self._yaw)
         if abs(err) < C.YAW_TOLERANCE_DEG:
             return
@@ -463,14 +553,24 @@ class RealRobot:
         step = max(-C.YAW_CORRECT_MAX_DEG, min(C.YAW_CORRECT_MAX_DEG, err))
         self._rotate_raw(C.YAW_SIGN * step)
         time.sleep(0.1)
+        self._wait_fresh("_att_n", 3, 1.0)          # ห้ามตัดสินจากค่า yaw ก่อนหมุน (ค้างมา)
         new_err = _ang_diff(self._yaw0, self._yaw)
         if abs(new_err) > abs(err) + 1.0:
             self.log(f"[yaw] แก้มุมแล้วเบี้ยวขึ้นแทนที่จะลดลง ({err:+.1f}° -> {new_err:+.1f}°) "
                      f"- หยุดแก้รอบนี้ไว้ก่อน ถ้าเกิดซ้ำบ่อยให้ลองตั้ง YAW_SIGN = {-C.YAW_SIGN} "
                      f"ใน config.py เอง (ไม่ใช้วิธีสลับอัตโนมัติแล้ว เพราะเคยทำให้หมุนเลยเถิด)")
 
+    def ensure_free_mode(self):
+        """โหมด FREE: gimbal หมุนอิสระจากตัวถัง (โหมด gimbal_lead ตัวถังจะหมุนตาม gimbal ; log 1/10 รอบ 2:
+        สั่ง gimbal 180° แล้วมุมจริงค่อยๆ ตาม ตัวถังหมุนไปเอง -86° ระหว่างเดิน -> สั่งโหมดให้ชัดทุกครั้งที่เริ่มรอบ)"""
+        try:
+            self._ep.set_robot_mode(mode=robot.FREE)
+        except Exception as e:                              # noqa: BLE001
+            self.log(f"[robot] ตั้งโหมด FREE ไม่สำเร็จ: {e}")
+
     def reset_heading_ref(self):
         """ใช้มุมตอนนี้เป็นทิศอ้างอิง (เรียกตอนเริ่มสำรวจ - ผู้ใช้วางหุ่นตรงกับกริดแล้ว)"""
+        self.ensure_free_mode()
         self._yaw0 = self._yaw
         self._yaw_start = self._yaw
         self._body_start = self.body_heading
@@ -518,15 +618,70 @@ class RealRobot:
         scale = min(1.0, 0.7 / math.hypot(bx, by))
         self.log(f"[undo] เดินไม่สำเร็จ -> ถอยกลับตาม odometry ({-bx * scale:+.2f}, {-by * scale:+.2f}) m")
         try:
+            self._cancel_speed_timer()
             self._ep.chassis.move(x=-bx * scale, y=-by * scale, z=0,
-                                  xy_speed=C.XY_SPEED).wait_for_completed(timeout=6.0)
+                                  xy_speed=C.SHIFT_SPEED).wait_for_completed(timeout=6.0)
         except Exception as e:                              # noqa: BLE001
             self.log(f"[undo] ถอยกลับล้มเหลว: {e}")
+        self._wait_still()
+
+    def _cancel_speed_timer(self):
+        """drive_speed(timeout=) ของ SDK ตั้ง timer ฝั่งคอมไว้สั่ง "หยุด" อีกทีหลัง 0.5 วิ -> ถ้าไปโดนตอน chassis.move
+        กำลังทำงาน action จะค้าง/ถูกตัด (log 1/10 06:34: shift 31mm ไม่เสร็จใน 2 วิ 2 ครั้งติด) -> ยกเลิกก่อนเสมอ"""
+        t = getattr(self._ep.chassis, "_auto_timer", None)
+        if t is not None:
+            try:
+                t.cancel()
+            except Exception:                               # noqa: BLE001
+                pass
+
+    def _stop_chassis(self):
+        """หยุดล้อทันที: หลัง chassis.move() timeout action ยังค้างดันต่อได้ (log 30/9: ชนแล้วสไลด์ไถลข้างกำแพง)"""
+        self._cancel_speed_timer()
+        try:
+            self._ep.chassis.drive_speed(x=0, y=0, z=0)
+            time.sleep(0.15)
+        except Exception as e:                              # noqa: BLE001
+            self.log(f"[chassis] สั่งหยุดล้อไม่สำเร็จ: {e}")
+
+    @staticmethod
+    def _move_timeout(dist_m, speed):
+        """เวลารอ chassis.move ให้เสร็จ: ระยะ/ความเร็ว + เผื่อเร่ง-เบรก"""
+        return max(C.MOVE_TIMEOUT_MIN_S, dist_m / speed * 1.5 + C.MOVE_TIMEOUT_EXTRA_S)
+
+    def recover_chassis(self):
+        """หยุดล้อแล้วรอ ให้ action ที่ค้าง (timeout) หลุดก่อนสั่งใหม่"""
+        self._stop_chassis()
+        time.sleep(C.CHASSIS_RECOVER_S)
+
+    def yaw_ok(self):
+        """มุมตัวถังยังใกล้มุมอ้างอิง (odometry แปลงทิศได้ถูก)"""
+        return abs(_ang_diff(self._yaw0, self._yaw)) <= C.ODOM_YAW_MAX_DEG
+
+    def moved_along(self, d):
+        """ระยะ (เมตร) ที่ odometry บอกว่าเดินไปตามทิศโลก d ตั้งแต่เริ่ม move_cell ล่าสุด (None = ไม่รู้)
+        มุมตัวถังเพี้ยนเกิน ODOM_YAW_MAX_DEG -> None (แปลงแกนผิด ห้ามใช้ตัดสิน)"""
+        if self._move_start_pos is None or not self.yaw_ok():
+            return None
+        dx = self._pos[0] - self._move_start_pos[0]
+        dy = self._pos[1] - self._move_start_pos[1]
+        a = math.radians(self._yaw)                  # กรอบ odometry -> กรอบตัวถัง (เหมือน undo_last_move)
+        bx = math.cos(a) * dx + math.sin(a) * dy     # หน้า
+        by = -math.sin(a) * dx + math.cos(a) * dy    # ขวา
+        h, r = self.body_heading, (self.body_heading + 1) % 4
+        wx = bx * DX[h] + by * DX[r]
+        wy = bx * DY[h] + by * DY[r]
+        return wx * DX[d] + wy * DY[d]
+
+    def moved_lateral(self, d):
+        """ระยะ (เมตร) ที่เยื้องไปทาง "ขวาของทิศ d" (ทิศ d+1) ตั้งแต่เริ่ม move_cell ล่าสุด ตาม odometry (None = ไม่รู้)"""
+        return self.moved_along((d + 1) % 4)
 
     def _rotate_raw(self, deg):
         if abs(deg) < 0.3:
             return
         try:
+            self._cancel_speed_timer()
             self._ep.chassis.move(x=0, y=0, z=deg, xy_speed=C.XY_SPEED,
                                   z_speed=C.Z_SPEED).wait_for_completed(timeout=6.0)
         except Exception as e:                              # noqa: BLE001
@@ -541,17 +696,109 @@ class RealRobot:
         by = wx * DY[h] - wy * DX[h]
         return bx, by
 
-    def shift(self, dx, dy):
-        """ขยับเล็กน้อย (เมตร, พิกัดโลก) ใช้ตอน recenter เท่านั้น"""
+    def shift(self, dx, dy, speed=None):
+        """ขยับ (เมตร, พิกัดโลก) - จัดกึ่งกลาง/เติม/ถอย ; speed=None ใช้ SHIFT_SPEED
+        ตรวจด้วย odometry ว่าขยับจริง (log 30/9 19:26: shift timeout แล้วหุ่นไม่ขยับเลย 2 ครั้งติด
+        -> จอดขาดกลางช่อง 155mm แล้วเดินต่อ) ; ได้ไม่ถึงครึ่ง -> หยุดล้อ สั่งส่วนที่เหลือซ้ำ ;
+        ยังไม่ขยับอีก -> ขับด้วย drive_speed วัด odometry เอง (ไม่พึ่งระบบ action ของ chassis.move)"""
+        speed = speed or C.SHIFT_SPEED
         bx, by = self._world_to_body(dx, dy)
-        try:
-            self._ep.chassis.move(x=bx, y=C.STRAFE_SIGN * by, z=0,
-                                  xy_speed=C.XY_SPEED, z_speed=C.Z_SPEED).wait_for_completed(timeout=4.0)
-        except Exception as e:                              # noqa: BLE001
-            self.log(f"[chassis] shift({dx:.3f},{dy:.3f}) ล้มเหลว: {e}")
+        want = math.hypot(bx, by)
+        start = self._pos
+        self._shift_action(bx, by, speed, f"shift({dx:+.3f},{dy:+.3f})")
+        if want < C.SHIFT_VERIFY_MIN_M or not self.yaw_ok():
+            return
+        ux, uy = bx / want, by / want
+        got = self._body_progress(start, ux, uy)
+        if got >= C.SHIFT_OK_FRAC * want:
+            return
+        if got < -0.03:
+            # odometry บอกว่าไปสวนทาง = ไหลค้างจากก้าวก่อน/ค่าไม่เชื่อถือ -> ห้ามสั่งเพิ่ม ให้ผู้เรียกวัดใหม่เอง
+            # (log 30/9 20:31: ได้ -171mm แล้วสั่งซ้ำ 321mm + drive 288mm = ขยับเกินที่สั่ง 2 เท่า)
+            self.log(f"[chassis] shift({dx:+.3f},{dy:+.3f}) odometry บอกขยับสวนทาง {got * 1000:.0f}mm "
+                     f"-> ไม่สั่งซ้ำ (วัด ToF ใหม่แทน)")
+            return
+        rest = want - max(0.0, got)          # ไม่สั่งเกินระยะเดิม
+        self.log(f"[chassis] shift({dx:+.3f},{dy:+.3f}) ขยับจริงแค่ {got * 1000:.0f}/{want * 1000:.0f}mm "
+                 f"(odometry) -> หยุดล้อ แล้วสั่งส่วนที่เหลือ {rest * 1000:.0f}mm ซ้ำ")
+        self.recover_chassis()
+        start2 = self._pos
+        self._shift_action(ux * rest, uy * rest, speed, "shift ซ้ำ")
+        got2 = self._body_progress(start2, ux, uy)
+        if got2 >= C.SHIFT_OK_FRAC * rest or got2 < -0.03 or not self.yaw_ok():
+            return
+        rest2 = rest - max(0.0, got2)
+        self.recover_chassis()
+        got3 = self._drive_body(ux, uy, rest2)
+        self.log(f"[chassis] shift ซ้ำยังไม่ขยับ ({got2 * 1000:.0f}mm) -> ขับ drive_speed "
+                 f"{rest2 * 1000:.0f}mm ได้ {got3 * 1000:.0f}mm")
 
-    def move_cell(self, d):
-        """เดินหนึ่งช่องไปทิศโลก d"""
+    def _shift_action(self, bx, by, speed, name):
+        """chassis.move ครั้งเดียว (พิกัดตัวถัง) + รอหุ่นนิ่ง"""
+        tmo = self._move_timeout(math.hypot(bx, by), speed)
+        self._cancel_speed_timer()
+        try:
+            t0 = time.time()
+            start = self._pos
+            lim = math.hypot(bx, by) + C.SHIFT_RUNAWAY_MM / 1000.0
+            act = self._ep.chassis.move(x=bx, y=C.STRAFE_SIGN * by, z=0, xy_speed=speed, z_speed=C.Z_SPEED)
+            ok, runaway = False, 0.0
+            # เฝ้า odometry ระหว่างรอ: ขยับรวมเกินที่สั่ง + SHIFT_RUNAWAY_MM (ทิศไหนก็ได้) = หุ่นไหล/วิ่งเอง -> หยุดล้อทันที
+            # (log 1/10 06:34 (5,5): สั่ง W 31mm แต่ odometry ไป N 270+180mm ชนกำแพงหน้า)
+            while time.time() - t0 < tmo:
+                if act._event.wait(0.03) and act.is_completed:
+                    ok = True
+                    break
+                runaway = math.hypot(self._pos[0] - start[0], self._pos[1] - start[1])
+                if runaway > lim:
+                    break
+            if not ok:
+                act.wait_for_completed(timeout=0.01)        # ให้ SDK ปิด action นี้ (ไม่ค้างขวางคำสั่งถัดไป)
+            if runaway > lim:
+                self.log(f"[chassis] {name} !! หุ่นขยับไป {runaway * 1000:.0f}mm เกินที่สั่ง "
+                         f"{math.hypot(bx, by) * 1000:.0f}mm -> หยุดล้อทันที")
+                self._stop_chassis()
+            elif not ok:
+                self.log(f"[chassis] {name} ไม่ยืนยันว่าสำเร็จใน {tmo:.1f}s (timeout/ถูกปฏิเสธ) -> หยุดล้อ")
+                self._stop_chassis()
+            elif time.time() - t0 > 0.7 * tmo:
+                self.log(f"[time] {name} ใช้ {time.time() - t0:.1f}s (ช้ากว่าปกติ)")
+        except Exception as e:                              # noqa: BLE001
+            self.log(f"[chassis] {name} ล้มเหลว: {e}")
+            self._stop_chassis()
+        self._wait_still()
+
+    def _body_progress(self, start, ux, uy):
+        """ระยะ (เมตร) ที่ odometry บอกว่าขยับไปตามทิศ (ux=หน้า, uy=ขวา ของตัวถัง) ตั้งแต่ตำแหน่ง start
+        (แปลงกรอบเหมือน undo_last_move)"""
+        dx = self._pos[0] - start[0]
+        dy = self._pos[1] - start[1]
+        a = math.radians(self._yaw)
+        bx = math.cos(a) * dx + math.sin(a) * dy
+        by = -math.sin(a) * dx + math.cos(a) * dy
+        return bx * ux + by * uy
+
+    def _drive_body(self, ux, uy, dist):
+        """ขับด้วย drive_speed ไปตามทิศตัวถัง (ux, uy) จน odometry ได้ระยะ dist (เมตร) หรือหมดเวลา -> ระยะที่ได้"""
+        v = C.SHIFT_DRIVE_SPEED
+        start = self._pos
+        deadline = time.time() + dist / v * 2.0 + 1.0
+        got = 0.0
+        try:
+            while time.time() < deadline:
+                got = self._body_progress(start, ux, uy)
+                if got >= dist - 0.01:
+                    break
+                self._ep.chassis.drive_speed(x=v * ux, y=C.STRAFE_SIGN * v * uy, z=0, timeout=0.5)
+                time.sleep(0.05)
+        except Exception as e:                              # noqa: BLE001
+            self.log(f"[chassis] drive_speed ล้มเหลว: {e}")
+        self._stop_chassis()
+        self._wait_still()
+        return self._body_progress(start, ux, uy)
+
+    def move_cell(self, d, dist_m=None):
+        """เดินหนึ่งช่องไปทิศโลก d ; dist_m = ระยะที่ต้องเดินจริง (explorer คำนวณจากกำแพงข้างหน้า) None = 1 ช่อง"""
         if C.MOVE_MODE == "rotate" and d != self.body_heading:
             turn_steps = (d - self.body_heading) % 4
             deg = {1: -90.0, 2: 180.0, 3: 90.0}[turn_steps]   # +90=ซ้าย (chassis.move ก้อนเดียว)
@@ -560,25 +807,250 @@ class RealRobot:
             self._yaw0 = self._yaw          # ทิศอ้างอิงใหม่หลังเลี้ยว
 
         self._move_start = self._pos
-        bx, by = self._world_to_body(DX[d] * self.cell_m, DY[d] * self.cell_m)
+        self._move_start_pos = self._pos
+        L = self.cell_m if dist_m is None else dist_m
+        bx, by = self._world_to_body(DX[d] * L, DY[d] * L)
         bx *= C.MOVE_FACTOR_FWD
         by *= C.MOVE_FACTOR_STRAFE
         ok = False
+        # เดิมรอ 8s: log 30/9 timeout 7 ครั้ง/รอบ = เสีย ~56s ทั้งที่เดิน 0.6m ใช้แค่ ~1.3s
+        tmo = self._move_timeout(math.hypot(bx, by), C.XY_SPEED)
+        t0 = time.time()
         try:
+            self._cancel_speed_timer()
             action = self._ep.chassis.move(x=bx, y=C.STRAFE_SIGN * by, z=0,
                                            xy_speed=C.XY_SPEED, z_speed=C.Z_SPEED)
-            ok = action.wait_for_completed(timeout=8.0)
+            ok = action.wait_for_completed(timeout=tmo)
         except Exception as e:                              # noqa: BLE001
             self.log(f"[chassis] เดินไปทิศ {DIRS[d]} ล้มเหลว: {e}")
         if not ok:
-            self.log(f"[chassis] เดินไปทิศ {DIRS[d]} ไม่ยืนยันว่าสำเร็จ (timeout/ถูกบล็อก) "
-                     f"- ตำแหน่งที่บันทึกไว้อาจไม่ตรงกับจริง (explorer จะตรวจซ้ำด้วย ToF)")
+            self._stop_chassis()
+            self.log(f"[chassis] เดินไปทิศ {DIRS[d]} ไม่ยืนยันว่าสำเร็จใน {tmo:.1f}s (timeout/ถูกบล็อก) -> สั่งหยุดล้อแล้ว "
+                     f"(explorer จะตรวจว่าไปถึงจริงไหมด้วย ToF + odometry)")
+        elif time.time() - t0 > 0.7 * tmo:
+            self.log(f"[time] เดินไปทิศ {DIRS[d]} ใช้ {time.time() - t0:.1f}s (ช้ากว่าปกติ)")
 
+        drift = self._wait_still()                  # ห้ามอ่าน ToF/ตัดสินอะไรตอนหุ่นยังไหลอยู่
+        if drift > 0.03:
+            self.log(f"[drift] เดินไปทิศ {DIRS[d]} คำสั่งเสร็จแล้วหุ่นยังไหลต่อ {drift * 1000:.0f}mm (รอจนหยุดก่อนอ่านค่า)")
         self.cell = (self.cell[0] + DX[d], self.cell[1] + DY[d])
         self.heading = d
         self.off = [0.0, 0.0]
         if C.MOVE_MODE != "rotate":
             self.correct_yaw()
+
+    # ---------- เดินแบบคุมตลอดทาง (MOVE_CLOSED_LOOP=True) ----------
+    def _sharp_once(self, rel):
+        """Sharp ด้าน rel (1=ขวา, 3=ซ้าย เทียบตัวถัง) อ่านครั้งเดียว -> (mm, expect) ; ใช้ไม่ได้ -> None"""
+        if not C.USE_SHARP or self._sharp_off:
+            return None
+        port, table, expect = ((C.SHARP_RIGHT, C.SHARP_R_TABLE, C.SHARP_R_EXPECT_MM) if rel == 1 else
+                               (C.SHARP_LEFT, C.SHARP_L_TABLE, C.SHARP_L_EXPECT_MM))
+        try:
+            v = self._ep.sensor_adaptor.get_adc(id=port[0], port=port[1])
+        except Exception:                                   # noqa: BLE001
+            return None
+        if v is None:
+            return None
+        return self._sharp_adc_to_mm(v, table), expect
+
+    def drive_cell(self, d, dist_m, lat_dir=None, odo_k=1.0, side_walls=None, front_wall=False):
+        """side_walls = {ทิศโลกข้าง: (ช่องนี้, ช่องปลายทาง)} 2=มีกำแพง 1=ยังไม่รู้ 0=โล่ง จากแผนที่ (ToF) ;
+        front_wall = ToF ก่อนเดินยืนยันว่ามีกำแพงที่ปลายช่องปลายทาง
+        Sharp เชื่อเฉพาะด้านที่แผนที่บอกว่ามีกำแพง + ค่า < CL_SHARP_TRUST_MM (log 30/9 23:26: ไม่มีกำแพง Sharp
+        อ่านหลอก 185-250 แทน 999 -> ดันหุ่นไป E ทุกก้าว 100-150mm / Sharp หน้าหลอกทำให้เดินช้าจนเกิน/หมดเวลา)
+        เดินไปทิศโลก d ระยะ dist_m ด้วย drive_speed คุมทุกรอบ (แบบ nathon-aie/SLAM ปรับให้เดินสไลด์):
+        - เดิน N/S: ToF บน gimbal ชี้ทิศเดิน (หยุดหน้ากำแพง) + Sharp ซ้าย/ขวาคุมกลางแนว E-W ตลอดทาง
+        - เดิน E/W: gimbal ชี้ lat_dir (กำแพงด้าน N/S ที่แผนที่รู้) คุมกลางแนว N-S ; Sharp ฝั่งที่เดินไป = ตัวหยุดหน้ากำแพง
+        - ระยะ: กำแพงหน้าเห็นแล้ว -> เทียบระยะอ้างอิงตรงๆ ; ไม่งั้น odometry (หาร scale สนาม)
+        ช้าลงช่วง CL_DECEL_MM สุดท้าย ; ไม่แก้ yaw ระหว่างทาง (แก้ด้วย correct_yaw หลังหยุด)"""
+        rel = (d - self.body_heading) % 4
+        ns_move = rel in (0, 2)
+        side = d if (ns_move or lat_dir is None) else lat_dir
+        srel = (side - self.body_heading) % 4
+        self._goto_gimbal(self._gimbal_yaw_for(side),
+                          C.GIMBAL_PITCH_SIDE if srel in (1, 3) else C.GIMBAL_PITCH)
+        self._wait_fresh("_tof_n", 3, 0.6)            # ToF ค่าแรกต้องมาหลัง gimbal หันเสร็จ (ไม่ใช่ทิศเก่า)
+        use_tof_front = side == d
+        use_tof_lat = not ns_move and side != d
+        self._move_start = self._pos
+        self._move_start_pos = self._pos
+        start = self._pos
+        ux, uy = DX[d], DY[d]                         # ทิศเดิน (โลก)
+        px, py = DX[(d + 1) % 4], DY[(d + 1) % 4]     # ทิศ "ขวาของทิศเดิน" (โลก)
+        L = dist_m * 1000.0
+        E = C.WALL_EXPECT_MM
+        V = C.CL_SPEED
+        deadline = time.time() + dist_m / V * 2.0 + 2.0
+        last_prog, last_t = 0.0, time.time()
+        why = "ครบระยะ"
+        lat_used = set()
+        # I ของตัวคุมข้าง (ล้อไถลข้างสม่ำเสมอ P อย่างเดียวค้างเยื้อง) ; เริ่มจากค่าไถลที่เรียนได้จากก้าวก่อนทิศเดียวกัน
+        # (log 1/10: ช่องโล่งไม่มีกำแพงข้าง เยื้อง 80-144mm ต่อก้าว -> ชดเชยล่วงหน้าได้)
+        if not hasattr(self, "_slip_i"):
+            self._slip_i = {}
+        integ, last_loop = C.CL_SLIP_MEMORY * self._slip_i.get(d, 0.0), time.time()
+        self._calib_sharp(side_walls)
+        hist = []                                     # ToF หน้าล่าสุด (ใช้ค่าน้อยสุด กันค่าหน่วง)
+        try:
+            while True:
+                now = time.time()
+                if now > deadline:
+                    why = "หมดเวลา"
+                    break
+                # --- ระยะที่เดินได้ (odometry) ---
+                moved = self._body_progress_world(start, ux, uy) * 1000.0 / odo_k
+                rest = L - moved
+                how = "odo"
+                # --- กำแพงหน้า (ระยะจริง) ---
+                front = None
+                if use_tof_front:
+                    hist.append(self._interpret_tof(self._tof[C.TOF_INDEX]))
+                    del hist[:-3]
+                    front = min(hist)
+                    if front < E + C.ABS_REF_FRAC * self.cell_m * 1000:
+                        rest, how = front - E, "tof"
+                    if front <= C.CL_EMERGENCY_MM:
+                        why = f"ฉุกเฉิน ToF หน้า {front:.0f}mm"
+                        break
+                elif front_wall and rest < C.CL_SHARP_FRONT_MM:
+                    sh = self._sharp_once(rel)                  # ใกล้ถึงกำแพงที่ยืนยันแล้ว = ค่าจริง
+                    if sh is not None and sh[0] < C.SHARP_WALL_MM:
+                        rest, how = sh[0] - sh[1], "sharp"
+                        if sh[0] <= C.CL_SHARP_EMERGENCY_MM:
+                            why = f"ฉุกเฉิน Sharp หน้า {sh[0]:.0f}mm"
+                            break
+                rest = min(rest, L + C.CL_OVER_MAX_MM - moved)   # ห้ามเกินระยะที่วางแผนมากเกิน
+                if rest <= C.CL_STOP_TOL_MM:
+                    why = f"ถึง ({how})"
+                    break
+                v = V if rest >= C.CL_DECEL_MM else max(C.CL_MIN_SPEED, V * rest / C.CL_DECEL_MM)
+                # --- ค่าเยื้องข้าง (mm, + = เยื้องไปทาง "ขวาของทิศเดิน") ---
+                off = None
+                if ns_move:
+                    vals = []
+                    for srel_ in (1, 3):                # 1 = Sharp ขวาตัวถัง (ชี้ E) , 3 = ซ้าย (ชี้ W)
+                        wd = (self.body_heading + srel_) % 4           # ทิศโลกที่ Sharp ชี้
+                        # 2 = แผนที่ยืนยันมีกำแพง (ค่าจริงแน่ ใช้ได้ถึง CL_SIDE_WALL_MM) ; 1 = ยังไม่รู้ (เชื่อแค่ค่าต่ำ
+                        # CL_SHARP_TRUST_MM) ; 0 = โล่ง (ค่า Sharp หลอก ห้ามใช้) ; ครึ่งแรกดูช่องนี้ ครึ่งหลังดูช่องปลายทาง
+                        known = 1 if side_walls is None else side_walls.get(wd, (1, 1))[moved >= L / 2]
+                        if not known:
+                            continue
+                        s = self._sharp_once(srel_)
+                        lim = C.CL_SIDE_WALL_MM if known == 2 else C.CL_SHARP_TRUST_MM
+                        if s is None or s[0] >= lim:
+                            continue
+                        # ใกล้กำแพงทิศ wd เกิน expect = เยื้องไปทาง wd (expect = ค่าที่เรียนจาก ToF ตอนอยู่กลางช่อง)
+                        toward = self._sharp_expect(srel_, s[1]) - s[0]
+                        sign = 1 if wd == (d + 1) % 4 else -1
+                        vals.append(sign * toward)
+                    if vals:
+                        off = sum(vals) / len(vals)
+                        lat_used.add("sharp")
+                elif use_tof_lat:
+                    t = self._interpret_tof(self._tof[C.TOF_INDEX])
+                    if t < E + C.CL_LAT_TOF_RANGE_MM:
+                        sign = 1 if side == (d + 1) % 4 else -1
+                        off = sign * (E - t)
+                        lat_used.add("tof")
+                vl = 0.0
+                dt, last_loop = now - last_loop, now
+                if off is not None:
+                    integ = max(-C.CL_LAT_I_MAX, min(C.CL_LAT_I_MAX, integ + off * dt))
+                    if abs(off) > C.CL_LAT_DEADBAND_MM or abs(integ) > 5:
+                        vl = max(-C.CL_LAT_MAX, min(C.CL_LAT_MAX, -C.CL_LAT_KP * off - C.CL_LAT_KI * integ))
+                elif integ:
+                    # กำแพงข้างหมด: ใช้ค่าไถลที่ I เรียนได้ชดเชยต่อ (ไม่มีตัววัด แต่ล้อยังไถลเท่าเดิม)
+                    vl = max(-C.CL_LAT_MAX, min(C.CL_LAT_MAX, -C.CL_LAT_KI * integ))
+                wx, wy = ux * v + px * vl, uy * v + py * vl
+                bx, by = self._world_to_body(wx, wy)
+                self._ep.chassis.drive_speed(x=bx, y=C.STRAFE_SIGN * by, z=0, timeout=0.5)
+                # --- ค้าง (ล้อหมุนแต่ไม่ไป) ---
+                if moved - last_prog > 15:
+                    last_prog, last_t = moved, now
+                elif now - last_t > C.CL_STALL_S:
+                    why = f"ค้างที่ {moved:.0f}mm"
+                    break
+                time.sleep(0.03)
+        except Exception as e:                              # noqa: BLE001
+            why = f"ผิดพลาด {e}"
+        self._stop_chassis()
+        if lat_used:
+            self._slip_i[d] = integ                  # ค่าไถลข้างที่เรียนได้ ใช้ตั้งต้นก้าวต่อไปทิศนี้
+        drift = self._wait_still()
+        moved = self._body_progress_world(start, ux, uy) * 1000.0 / odo_k
+        self.log(f"[drive] ทิศ {DIRS[d]} {moved:.0f}/{L:.0f}mm {why} ; คุมข้างด้วย "
+                 f"{'+'.join(sorted(lat_used)) or 'ไม่มี (odometry)'}"
+                 + (f" ; ไหลหลังหยุด {drift * 1000:.0f}mm" if drift > 0.03 else ""))
+        self.cell = (self.cell[0] + DX[d], self.cell[1] + DY[d])
+        self.heading = d
+        self.off = [0.0, 0.0]
+        self.correct_yaw()
+
+    def _calib_sharp(self, side_walls):
+        """ตอนเริ่มเดิน (หุ่นเพิ่งจัดกลางช่องด้วย ToF): ด้านที่แผนที่ยืนยันว่าช่องนี้มีกำแพง -> ค่า Sharp ตอนนี้ = ค่าตอน
+        "อยู่กลางช่อง" ของ Sharp ตัวนั้น เก็บค่ากลางล่าสุดไว้ใช้แทนค่าคงที่ (log 1/10: มี Sharp คุมยังเยื้อง 80-104mm
+        ค่าคงที่ 149/141 จาก 27/9 กับ ToF อาจนิยามกลางช่องไม่ตรงกัน)"""
+        if side_walls is None or not C.CL_SHARP_AUTOCAL:
+            return
+        if not hasattr(self, "_sharp_cal"):
+            self._sharp_cal = {1: [], 3: []}
+        for srel in (1, 3):
+            wd = (self.body_heading + srel) % 4
+            if side_walls.get(wd, (0, 0))[0] != 2:
+                continue
+            vals = [v[0] for v in (self._sharp_once(srel) for _ in range(3)) if v is not None]
+            if not vals:
+                continue
+            v = sorted(vals)[len(vals) // 2]
+            base = C.SHARP_R_EXPECT_MM if srel == 1 else C.SHARP_L_EXPECT_MM
+            if v < C.CL_SIDE_WALL_MM and abs(v - base) < C.CL_SHARP_CAL_MAX_MM:
+                self._sharp_cal[srel].append(v)
+                del self._sharp_cal[srel][:-9]
+
+    def _sharp_expect(self, srel, default):
+        cal = getattr(self, "_sharp_cal", {}).get(srel, [])
+        if len(cal) < 3:
+            return default
+        return sorted(cal)[len(cal) // 2]
+
+    # ---------- วัดมุมตัวถังเทียบกำแพง (แก้ "เอียงขวาค้าง") ----------
+    def wall_skew(self, d, theta):
+        """ตัวถังหมุนเอียงจากกริดกี่องศา (+ = เอียงตามเข็ม/ขวา) วัดจากกำแพงทิศ d ของช่องนี้: ToF ที่มุม ±theta จาก
+        แนวตั้งฉาก (มุมเทียบตัวถัง) ; ตัวถังตรง = สองค่าเท่ากัน ; เอียงขวา = ด้าน +theta ยาวกว่า
+        tan(psi) = (r+ - r-) cos(theta) / ((r+ + r-) sin(theta)) (r = ระยะจากจุดหมุน gimbal = ToF + ระยะเผื่อ)
+        (ผู้ใช้ 1/10: หุ่นเอียงขวาแล้วค้างแบบนั้นตลอด = มุมอ้างอิง IMU ผิด/IMU ลอย IMU อย่างเดียวไม่รู้)
+        -> (องศา, r+, r-) หรือ None (gimbal ไปไม่ถึง/ค่าไม่นิ่ง)"""
+        e = self.cell_m * 500.0 - C.WALL_EXPECT_MM           # ToF อ่าน 195 ตอนกำแพงห่างจุดกลาง 300
+        rrel = (d - self.body_heading) % 4
+        pitch = C.GIMBAL_PITCH_SIDE if rrel in (1, 3) else C.GIMBAL_PITCH
+        rs = []
+        for sgn in (1, -1):
+            world = d * 90.0 + sgn * theta
+            rel = (world - self.body_heading * 90.0 + 180.0) % 360.0 - 180.0
+            yaw = self.gimbal_yaw_sign * rel * (1 if C.GIMBAL_RIGHT_YAW > 0 else -1)
+            if not self._goto_gimbal(yaw, pitch, attempts=1, extra_wait_s=0.8):
+                return None
+            time.sleep(C.TOF_SETTLE_S)
+            samples, stable = self._fresh_tof_samples()
+            if not stable:
+                return None
+            rs.append(statistics.median(samples) + e)
+        rp, rm = rs
+        t = math.radians(theta)
+        psi = math.degrees(math.atan((rp - rm) * math.cos(t) / ((rp + rm) * math.sin(t))))
+        return psi, rp - e, rm - e
+
+    def apply_skew(self, psi):
+        """ตัวถังเอียงตามเข็ม psi องศาจากกริด -> ตั้งมุมอ้างอิง IMU ใหม่ (ตรงจริง = มุมตอนนี้ - psi) แล้วหมุนแก้
+        (yaw ของ IMU ตามเข็ม = บวก ; correct_yaw จำกัดการหมุนต่อครั้งอยู่แล้ว)"""
+        self._yaw0 = self._yaw - psi
+        self.correct_yaw()
+
+    def _body_progress_world(self, start, wx, wy):
+        """ระยะ (m) ที่ odometry บอกว่าไปตามทิศโลก (wx, wy) ตั้งแต่ start"""
+        bx, by = self._world_to_body(wx, wy)
+        return self._body_progress(start, bx, by)
 
     # ---------- lifecycle ----------
     def close(self):

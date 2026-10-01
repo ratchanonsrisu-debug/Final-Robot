@@ -21,7 +21,8 @@ from grid_map import DIRS, DX, DY, WALL, OPEN, UNKNOWN
 class RunLogger:
     FIELDS = ["step", "time_s", "event", "cell_x", "cell_y", "heading",
               "est_x_m", "est_y_m", "odom_x_m", "odom_y_m", "yaw_deg",
-              "tof_N", "tof_E", "tof_S", "tof_W", "walls_NESW", "note"]
+              "tof_N", "tof_E", "tof_S", "tof_W", "sharp_N", "sharp_E", "sharp_S", "sharp_W",
+              "walls_NESW", "note"]
 
     def __init__(self, out_dir, echo=print):
         os.makedirs(out_dir, exist_ok=True)
@@ -35,7 +36,7 @@ class RunLogger:
         self.traj = []        # (t, est_x, est_y, odom_x, odom_y, cell_x, cell_y, event)
         self.echo = echo
 
-    def log(self, robot, event, tof=None, walls=None, note=""):
+    def log(self, robot, event, tof=None, walls=None, note="", sharp=None):
         ex, ey = robot.est_xy()
         od = robot.odom_xy()
         yw = robot.yaw()
@@ -51,11 +52,17 @@ class RunLogger:
         if tof:
             for d, v in tof.items():
                 row["tof_" + DIRS[d]] = round(v)
+        for d, v in (sharp or {}).items():
+            if v is not None:
+                row["sharp_" + DIRS[d]] = round(v[0])
         self.w.writerow(row)
         self.f.flush()
         self.traj.append((t, ex, ey, od[0] if od else None, od[1] if od else None,
                           robot.cell[0], robot.cell[1], event))
         self.step += 1
+        hb = getattr(self, "heartbeat", None)
+        if hb:
+            hb()
         if note:
             self.echo(f"[{event}] {note}")
 
@@ -78,6 +85,7 @@ class Explorer:
         self.plan = []            # เส้นทางที่วางแผนไว้ (list ของ cell) ไว้ให้ GUI วาด
         self.warnings = 0
         self.last_block = None     # (cell, d, conflict) ของการ blocked ล่าสุดใน step()
+        self.move_fails = {}       # (cell, d) -> จำนวนครั้งที่เดินไปทางนี้ไม่สำเร็จ
         self.hunter = hunter
         if hunter is not None:
             hunter.attach(self)
@@ -121,10 +129,12 @@ class Explorer:
         # เดิมให้ Sharp ชนะเสมอ: log 27/9 20:47 Sharp อ่าน "กำแพง" ทั้งที่ ToF เห็นโล่ง 1.3-1.9m
         # แล้วเขียนทับขอบที่เคยถูกไปแล้ว
         notes = []
+        # อ่าน Sharp ซ้าย/ขวาทุกครั้งที่สแกน (บันทึกลง log คอลัมน์ sharp_* ไว้ตรวจเซนเซอร์ย้อนหลัง)
+        sharp = {d: self.r.read_sharp(d) for d in range(4)}
         for d in range(4):
             if self.m.is_boundary(x, y, d):
                 continue                    # ขอบสนาม: รู้อยู่แล้วว่าเป็นกำแพง (ดูด้านล่าง)
-            sh = self.r.read_sharp(d)
+            sh = sharp.get(d)
             if sh is None:
                 continue
             s_wall = sh[0] < C.SHARP_WALL_MM
@@ -189,7 +199,7 @@ class Explorer:
             self.m.visited[x][y] = True
 
         walls = "".join({WALL: "W", OPEN: ".", UNKNOWN: "?"}[obs[d]] for d in range(4))
-        self.L.log(self.r, event, tof, walls, note)
+        self.L.log(self.r, event, tof, walls, note, sharp=sharp)
 
         if C.RECENTER:
             self.recenter(tof)
@@ -201,7 +211,8 @@ class Explorer:
         if not hasattr(self.r, "odo_k"):
             self.r.odo_k = [[], []]
         ks = self.r.odo_k[axis]
-        return sorted(ks)[len(ks) // 2] if ks else 1.0
+        # ยังไม่ได้เรียน -> ค่าตั้งต้นต่อแกน (strafe E-W odometry อ่านเกินมากกว่าเดินหน้า N-S)
+        return sorted(ks)[len(ks) // 2] if ks else C.ODOM_K_DEFAULT[axis]
 
     def recenter(self, tof):
         """ใช้ระยะถึงกำแพงประมาณค่าเบี่ยงจากกลางช่อง แล้วขยับกลับ"""
@@ -223,7 +234,7 @@ class Explorer:
         if odo is not None:
             for i in range(2):
                 if ref[i] is not None:
-                    o0, t0 = ref[i]
+                    o0, t0 = ref[i][0], ref[i][1]
                     off = (t0 + (odo[i] - o0) / self._odo_k(i) - centre[i]) * 1000
                     if abs(off) > 0.4 * self.m.cell_m * 1000:
                         ref[i] = None           # เยื้องเกินครึ่งช่อง = จุดยึดผิด (เช่น relocalize) ทิ้ง
@@ -234,6 +245,25 @@ class Explorer:
         def clearly_open(d):
             v = tof.get(d, 1e9)
             return v == th + 1 or v >= th + 0.25 * self.m.cell_m * 1000   # th+1 = ToF/Sharp ขัดกัน (sense)
+
+        cell_mm = self.m.cell_m * 1000
+
+        def far_ref(d):
+            """ช่องนี้โล่งทิศ d แต่ช่องถัดไปมีกำแพงไกล (แผนที่รู้แล้ว) -> ใช้กำแพงนั้นอ้างอิง (ห่าง EXPECT + 1 ช่อง)
+            (log 30/9: (2,4)/(5,4) ไม่มีกำแพง N/S ในช่องตัวเอง เลยไม่เคยแก้แนวนั้น -> เยื้องใต้ 13-25 ซม. ชนมุมกำแพง)"""
+            v = tof.get(d)
+            nx, ny = x + DX[d], y + DY[d]
+            if v is None or wall(d) or not self.m.in_bounds(nx, ny):
+                return None
+            if self.m.state(x, y, d) != OPEN or self.m.state(nx, ny, d) != WALL:
+                return None
+            ref = E + cell_mm
+            return ref if abs(v - ref) < C.FAR_WALL_TOL_MM else None
+
+        def corr_of(items, t, pos):
+            """ค่าแก้ (mm, + = ไปทาง pos) จากรายการ (ทิศ, ระยะที่ควรอ่านได้ถ้าอยู่กลางช่อง)"""
+            vals = [(t[d] - r) if d == pos else -(t[d] - r) for d, r in items]
+            return sum(vals) / len(vals)
 
         def axis_corr(pos, neg):
             p = pred[cur_axis[0]]
@@ -254,36 +284,46 @@ class Explorer:
                         and abs(c1 - p) < C.ODOM_AGREE_MM)
             dp, dn = tof.get(pos), tof.get(neg)
             if plausible(pos) and plausible(neg) and abs(dp + dn - 2 * E) < 120:
-                return (dp - dn) / 2.0, (pos, neg)
+                return (dp - dn) / 2.0, ((pos, E), (neg, E))
             if plausible(pos) and (not plausible(neg) or abs(dp - E) <= abs(dn - E)):
-                return dp - E, (pos,)
+                return dp - E, ((pos, E),)
             if plausible(neg):
-                return -(dn - E), (neg,)
+                return -(dn - E), ((neg, E),)
+            # ไม่มีกำแพงในช่องตัวเองแนวนี้ -> ลองกำแพงไกลของช่องถัดไป
+            items = tuple((d, r) for d, r in ((pos, far_ref(pos)), (neg, far_ref(neg))) if r is not None)
+            if items:
+                return corr_of(items, tof, pos), items
             return 0.0, ()
 
         corr = [0.0, 0.0]    # mm, world x/y  (ทิศที่ต้องขยับ)
         hold = []
+        used_axes = [(), ()]  # ทิศ/ระยะอ้างอิงที่ใช้วัดแต่ละแกน (ใช้วัดซ้ำหลังขยับ)
         for pos, neg, axis in ((0, 2, 1), (1, 3, 0)):     # (N,S)->y  (E,W)->x
             cur_axis[0] = axis
             c, used = axis_corr(pos, neg)
             if abs(c) > 60 and used:
                 # แก้เยอะ -> อ่านซ้ำทิศที่ใช้ แล้วใช้ค่ากลาง (กันค่า ToF หลุดทำให้หุ่นขยับผิด)
-                hist = {d: [tof[d]] for d in used}
-                for d in used:
+                hist = {d: [tof[d]] for d, _ in used}
+                for d, _ in used:
                     hist[d] += [self.r.read_dir(d), self.r.read_dir(d)]
                     tof[d] = sorted(hist[d])[1]
                 c, used = axis_corr(pos, neg)
+            used_axes[axis] = used
             if used:
                 if odo is not None:     # ToF วัดแกนนี้ได้ -> ตั้งจุดยึด odometry ใหม่
                     true = centre[axis] - c / 1000.0
-                    if ref[axis] is not None and abs(true - ref[axis][1]) >= 0.5:
-                        # เรียน scale odometry ของสนามนี้: ระยะ odometry / ระยะจริงตาม ToF
-                        # (log: สนาม 27-28/9 ~1.10 แต่สนาม 28/9 09:51 ~1.00 -> ค่าตายตัวใช้ไม่ได้)
+                    # near = วัดจากกำแพงของช่องตัวเอง (~195mm แม่น) ; far_ref (ToF ~800mm) คลาดได้ ~100mm
+                    near = all(r == E for _, r in used)
+                    if (near and ref[axis] is not None and ref[axis][2]
+                            and abs(true - ref[axis][1]) >= 0.5):
+                        # เรียน scale odometry ของสนามนี้: ระยะ odometry / ระยะจริงตาม ToF - เฉพาะจุดยึดกำแพงใกล้ทั้งคู่
+                        # (log 30/9 20:31: เรียนจาก far_ref ได้ k=0.83 ทั้งที่จริง ~1.10 -> เดินขาดช่องละ 140mm
+                        #  3 ช่องหายไป 1 ช่อง ตำแหน่งผิดทั้งแผนที่)
                         k = (odo[axis] - ref[axis][0]) / (true - ref[axis][1])
                         ks = self.r.odo_k[axis]
-                        ks.append(max(0.85, min(1.25, k)))
+                        ks.append(max(C.ODOM_K_MIN, min(C.ODOM_K_MAX, k)))
                         del ks[:-7]
-                    ref[axis] = (odo[axis], true)
+                    ref[axis] = (odo[axis], true, near)
             elif (pred[axis] is not None and abs(pred[axis]) >= C.ODOM_HOLD_MIN_MM
                   and clearly_open(pos) and clearly_open(neg)):
                 # ใช้ odometry เฉพาะแกนที่ "ไม่มีกำแพงจริง ๆ" ทั้งสองฝั่ง - ถ้ามีกำแพงแต่ค่าเยื้อง
@@ -308,17 +348,37 @@ class Explorer:
             self.r.shift(mv[0], mv[1])
             self.r.off = [self.r.off[0] + mv[0], self.r.off[1] + mv[1]]
             self.L.log(self.r, "recenter")
+        # วัดซ้ำหลังขยับ (closed loop): ขยับสั้นๆ ของล้อ mecanum มักไปไม่ถึงที่สั่ง -> แก้ต่อจนเหลือ < RECENTER_MIN
+        for it in range(C.RECENTER_ITERS):
+            if mv == [0.0, 0.0] or self.stopped():
+                break
+            nxt, parts = [0.0, 0.0], []
+            for axis, pos in ((1, 0), (0, 1)):
+                if mv[axis] == 0.0 or not used_axes[axis]:
+                    continue
+                t2 = {d: self.r.read_dir(d) for d, _ in used_axes[axis]}
+                r = corr_of(used_axes[axis], t2, pos)
+                # เหลือเกิน MAX เล็กน้อย = ขยับรอบก่อนไม่ถึง (log 30/9 19:26: เหลือ 155mm ถูกข้าม -> เดินต่อทั้งที่เยื้อง)
+                # -> แก้เต็ม MAX ; เกิน 1.6 เท่า = ค่าอ่านน่าสงสัย ข้าม
+                if C.RECENTER_MIN_MM <= abs(r) <= 1.6 * C.RECENTER_MAX_MM:
+                    nxt[axis] = max(-C.RECENTER_MAX_MM, min(C.RECENTER_MAX_MM, r)) / 1000.0
+                    parts.append(f"{'xy'[axis]} เหลือ {-r:+.0f}mm")
+            mv = nxt
+            if mv == [0.0, 0.0]:
+                break
+            self.r.shift(mv[0], mv[1])
+            self.r.off = [self.r.off[0] + mv[0], self.r.off[1] + mv[1]]
+            self.L.log(self.r, "recenter", note=f"วัดซ้ำรอบ {it + 1}: {' '.join(parts)} -> ขยับต่อ")
 
     # ------------------------------------------------------------ ACT
     def step(self, d):
         """เดิน 1 ช่อง ไปทิศ d ; คืน False ถ้าไปไม่ได้ (เจอกำแพง)"""
         x, y = self.r.cell
         th = C.WALL_THRESHOLD_MM
-        # 1) ยืนยันก่อนเดิน: อ่าน ToF ทิศที่จะไปใหม่อีกครั้ง (รวมกับค่าจากการสแกน) แล้วโหวตเสียงข้างมาก
-        reads = [self.r.read_dir(d)]
-        if self.last_tof.get("_cell") == (x, y) and d in self.last_tof:
-            reads.append(self.last_tof[d])
-        if len(reads) == 1 or (reads[0] < th) != (reads[1] < th):
+        # 1) ยืนยันก่อนเดิน: อ่าน ToF ทิศที่จะไปใหม่ 2 ครั้ง (ขัดกันอ่านครั้งที่ 3) แล้วโหวตเสียงข้างมาก
+        # ห้ามใช้ค่าจากการสแกน (last_tof): อ่านก่อน recenter ขยับหุ่น -> ค่าเก่า ระยะหน้าผิดเท่าที่ขยับ
+        reads = [self.r.read_dir(d), self.r.read_dir(d)]
+        if (reads[0] < th) != (reads[1] < th) or abs(reads[0] - reads[1]) > 60:
             reads.append(self.r.read_dir(d))
         walls_n = sum(r < th for r in reads)
         tof_wall = walls_n * 2 >= len(reads) and walls_n > 0
@@ -331,6 +391,18 @@ class Explorer:
             # (ไม่งั้นวนซ้ำ: recheck บอกโล่ง -> step ถูก Sharp ห้าม -> UNKNOWN -> recheck ใหม่)
             # ถ้าผิดจริง เช็ค progress หลังเดินจะจับได้และถอยกลับ
             sharp_wall = False
+        if (tof_wall or sharp_wall) and self.m.is_passed(x, y, d):
+            if self.move_fails.get((self.r.cell, d), 0) >= 2:
+                # เชื่อแผนที่แล้วยังเดินผ่านไม่ได้ 2 ครั้ง -> เลิกถือว่า "เคยผ่าน" ให้ logic ปกติตัดสิน (กันวนไม่จบ)
+                self.m.passed.discard(self.m._edge_ref(x, y, d))
+            else:
+                self.L.log(self.r, "passed_edge", {d: min(reads)},
+                           note=f"ขอบ {DIRS[d]} เคยเดินผ่านมาแล้ว แต่ ToF {min(reads):.0f}mm/Sharp "
+                                f"{'-' if sh is None else f'{sh[0]:.0f}'}mm บอกกำแพง (หุ่นเยื้อง?) -> เชื่อแผนที่ "
+                                f"เดินเต็มช่อง (มีตัวหยุดฉุกเฉิน ToF/Sharp ระหว่างเดิน)")
+                tof_wall = sharp_wall = False
+                # วางแผนระยะแบบทางโล่ง (ไม่งั้น _plan_move จำกัดระยะตามค่าที่อ่านผิด เดินไม่ถึงแล้ววนซ้ำ)
+                reads = [max(v, th + self.m.cell_m * 1000) for v in reads]
         if tof_wall or sharp_wall:
             if tof_wall and (sh is None or sharp_wall):
                 self.m.update(x, y, d, True)
@@ -347,19 +419,28 @@ class Explorer:
             self.on_update()
             return False
         prev = self.r.cell
-        # ระยะไปทิศ d ก่อนเดิน (ใช้เช็คว่า "เดินไปจริง" ด้านล่าง) - ใช้ค่ากลาง (median)
+        # ระยะไปทิศ d ก่อนเดิน (ค่ากลาง) -> ระยะที่จะสั่งเดิน (ห้ามเกินที่กำแพงข้างหน้าเหลือให้)
         before_mm = sorted(reads)[len(reads) // 2]
-        before_mm = self._premove_backoff(d, before_mm)
-        self.r.move_cell(d)
-        after = self.r.read_dir(d)
-        # ตรวจว่า "เดินไปจริง": ล้อ mecanum ลื่น/สั่นอยู่กับที่ได้โดยที่ chassis.move() ยัง
-        # รายงานว่าสำเร็จ -> เทียบระยะ ToF ทิศเดียวกันก่อน/หลัง
-        # (ตัดเช็ค "collision" เดิมออก: lim = EXPECT - 0.25*CELL = 34mm ต่ำกว่า blind zone 60mm
-        #  จึงไม่เคยทำงาน และถ้าทำงานก็ย้อนตำแหน่งผิด - หุ่นที่ชนกำแพงหน้าหลังเดินครบช่อง
-        #  อยู่ในช่องใหม่แล้ว recenter จะถอยออกให้เอง)
-        if before_mm < C.TOF_MAX_VALID_MM:
+        dist_mm, before_mm, plan_note = self._plan_move(d, before_mm)
+        # ช่วงแรกเร็ว หยุดก่อนเป้า MOVE_FAST_MARGIN_MM (ไถลต่อได้ไม่ชน) -> ช่วงสุดท้ายช้า (_finish_move)
+        closed = C.MOVE_CLOSED_LOOP and C.MOVE_MODE != "rotate" and hasattr(self.r, "drive_cell")
+        if closed:
+            # เดินทั้งระยะด้วยการคุมตลอดทาง (ชะลอ/หยุดเองที่กลางช่อง) ; เดิน E/W เลือกกำแพงข้างให้ ToF ใช้คุมกลาง
+            fast_mm = dist_mm
+            walls, front_wall = self._drive_refs(d, before_mm)
+            self.r.drive_cell(d, dist_mm / 1000.0, self._lat_wall(d), self._odo_k(0 if d in (1, 3) else 1),
+                              side_walls=walls, front_wall=front_wall)
+        else:
+            fast_mm = max(0.25 * dist_mm, dist_mm - C.MOVE_FAST_MARGIN_MM)
+            self.r.move_cell(d, fast_mm / 1000.0)
+        after = self._front_after_move(d, before_mm)
+        self._check_yaw(d)
+        # ToF ก่อน-หลัง ใช้ตรวจ "เดินไปจริงไหม" ได้เฉพาะเมื่อค่าก่อนเดินไม่ไกลเกิน (ToF ระยะ ~1 ม. คลาดได้ 200mm)
+        rel_ok = before_mm <= C.MOVE_TOPUP_RANGE_MM
+        if rel_ok:
+            # ล้อ mecanum ลื่น/สั่นอยู่กับที่ได้โดยที่ chassis.move() ยังรายงานว่าสำเร็จ
             progress = before_mm - after
-            min_progress = self.m.cell_m * 1000 * 0.3
+            min_progress = min(self.m.cell_m * 1000 * 0.3, 0.5 * fast_mm)
             if progress < min_progress:
                 after2 = self.r.read_dir(d)   # อ่านซ้ำ กัน outlier ครั้งเดียว
                 if before_mm - after2 > progress:
@@ -372,41 +453,283 @@ class Explorer:
                              "(เช็ค STRAFE_SIGN / YAW_SIGN ใน config.py)")
                 self._fail_move(prev, "no_progress", {d: after}, note)
                 return False
-            # เติมระยะ: ขยับจริงไม่ถึง 1 ช่อง (ล้อลื่น/ไถลข้าง) -> เดินเพิ่มทีละนิดตาม ToF
-            if C.MOVE_TOPUP and before_mm <= C.MOVE_TOPUP_RANGE_MM:
-                after = self._top_up(d, before_mm, after)
-        self.L.log(self.r, "move", {d: after})
+        if C.MOVE_TOPUP:
+            after = self._finish_move(d, after, dist_mm, before_mm)
+        if not closed:
+            self._fix_lateral(d)        # แบบใหม่คุมข้างด้วยเซนเซอร์แล้ว (odometry ข้างมองไม่เห็นล้อลื่น ห้ามแก้ทับ)
+        # ยืนยันว่า "ถึงช่องใหม่จริง" ก่อนนับว่าผ่าน
+        ok, after, why = self._arrived(d, before_mm, after, dist_mm, rel_ok)
+        if not ok and C.MOVE_PUSH_RETRY:
+            ok, after = self._push_rest(d, after, dist_mm, before_mm)
+            if ok:
+                self._fix_lateral(d)
+        if not ok:
+            key = (prev, d)
+            self.move_fails[key] = self.move_fails.get(key, 0) + 1
+            note = f"เดินไป {DIRS[d]} ไม่ถึงช่องใหม่: {why} ครั้งที่ {self.move_fails[key]}"
+            if self.move_fails[key] >= C.MOVE_FAIL_BLOCK:
+                # ไปทางนี้ไม่ผ่านซ้ำ -> ให้ planner เลี่ยงชั่วคราวด้วย UNKNOWN (ห้ามตีเป็นกำแพง: log 30/9 15:34 ทางโล่ง
+                # ToF 1350mm ถูกตีเป็นกำแพงตั้งแต่ช่องแรก) ; recheck_suspect_walls จะวัดซ้ำตัดสินอีกครั้ง
+                self.m.set_lo(prev[0], prev[1], d, 0.0)
+                note += " -> ขอบนี้ UNKNOWN ไว้ก่อน (recheck ตัดสินใหม่)"
+            self._fail_move(prev, "incomplete_move", {d: after}, note)
+            return False
+        self.m.mark_passed(prev[0], prev[1], d)     # เดินผ่านขอบนี้มาแล้วจริง -> โล่งแน่
+        self.L.log(self.r, "move", {d: after}, note=plan_note)
         self.on_update()
         return True
 
-    def _premove_backoff(self, d, before_mm):
-        """ก่อนเดิน: ToF ข้างหน้าเห็นกำแพงไกลของช่องถัดไปใกล้กว่า CELL+EXPECT = หุ่นล้ำไปข้างหน้า
-        เดินเต็มช่องจะชนกำแพงหน้า (log 28/9 00:03: (3,1) หน้า 652mm แทน ~784 -> เดินแล้วชน ToF 60)
-        -> ถอยเท่าที่ล้ำก่อน แล้วค่อยเดิน (ไม่แก้กลางก้าว) ; คืนระยะหน้าใหม่"""
+    def _align_heading(self, tof=None, light=False):
+        """กำแพงของช่องนี้ (ToF ใกล้ ~195) ทิศใดทิศหนึ่ง -> วัดมุมตัวถังเทียบกำแพง -> เอียงเกิน ALIGN_MIN_DEG หมุนแก้
+        (ลำแสง ToF เป็นกรวย วัดได้ต่ำกว่าจริง ~ครึ่ง -> แก้ซ้ำทุกช่องจนลู่เข้าตรง)
+        light=True (ช่องที่เดินผ่านซ้ำ/รอบ 2): ทำเมื่อห่างจากครั้งก่อน ALIGN_LIGHT_EVERY_S (IMU ลอย ~1°/นาที)"""
+        tof = self.last_tof if tof is None else tof
+        if light and time.time() - getattr(self, "_align_t", 0.0) < C.ALIGN_LIGHT_EVERY_S:
+            return
+        cands = [d for d in (0, 2, 1, 3)
+                 if isinstance(tof.get(d), (int, float)) and C.ALIGN_WALL_MM[0] <= tof[d] <= C.ALIGN_WALL_MM[1]]
+        if not cands:
+            return
+        d = cands[0]
+        res = self.r.wall_skew(d, C.ALIGN_THETA_DEG)
+        if res is None:
+            return
+        psi, rp, rm = res
+        note = (f"กำแพง {DIRS[d]}: ToF +{C.ALIGN_THETA_DEG:.0f}°={rp:.0f} -{C.ALIGN_THETA_DEG:.0f}°={rm:.0f} "
+                f"-> ตัวถังเอียง{'ขวา' if psi > 0 else 'ซ้าย'} {abs(psi):.1f}°")
+        # (log 1/10 02:50: เดิมเทียบกับค่าช่องก่อน -1.9° -> ช่องถัดไป -6.3° (IMU ลอย/ล้อไถลระหว่างทาง ไม่ใช่แก้ผิดทิศ)
+        #  -> ปิดตัวเองตั้งแต่ช่องที่ 2 แล้ว IMU ลอยสะสม ~15° จนจบรอบ -> ตอนนี้ตรวจทันทีที่เดิมหลังหมุนแก้แทน)
+        self._align_t = time.time()
+        if abs(psi) < C.ALIGN_MIN_DEG:
+            return
+        if abs(psi) > C.ALIGN_MAX_DEG:
+            self.L.log(self.r, "align", note=note + f" เกิน {C.ALIGN_MAX_DEG}° (ค่าน่าสงสัย) ไม่แก้")
+            return
+        step = max(-C.ALIGN_STEP_MAX_DEG, min(C.ALIGN_STEP_MAX_DEG, psi))
+        self.L.log(self.r, "align", note=note + f" -> หมุนแก้ {step:+.1f}°")
+        yaw0_before = self.r._yaw0
+        self.r.apply_skew(step)
+        n_chk = getattr(self, "_align_checks", 0)
+        if n_chk >= C.ALIGN_VERIFY_N or abs(step) < 1.5 or self.stopped():
+            return
+        # ตรวจทิศการหมุนแก้ (เฉพาะช่วงแรก): วัดกำแพงเดิมซ้ำทันที หมุนถูกทิศ -> เอียงลดลง ; ผิดทิศ -> ~เท่าตัว
+        res2 = self.r.wall_skew(d, C.ALIGN_THETA_DEG)
+        if res2 is None:
+            return
+        psi2 = res2[0]
+        self._align_checks = n_chk + 1
+        if psi2 * psi > 0 and abs(psi2) > abs(psi) + 0.5 * abs(step):
+            self.r._yaw0 = yaw0_before
+            self.r.correct_yaw()
+            C.ALIGN_ENABLE = False
+            self.L.log(self.r, "align", note=f"หมุนแก้แล้ววัดซ้ำเอียง {psi2:+.1f}° (มากขึ้นจาก {psi:+.1f}°) "
+                                             f"= หมุนผิดทิศ -> หมุนคืน + ปิดการแก้เอียงเอง (เช็คเครื่องหมาย yaw)")
+        else:
+            self.L.log(self.r, "align", note=f"ตรวจหลังแก้: เหลือเอียง {psi2:+.1f}° (ทิศการหมุนแก้ถูก)")
+
+    def _drive_refs(self, d, before_mm):
+        """สำหรับเดินแบบคุมตลอดทาง: กำแพงข้างสองฝั่ง {ทิศ: (ช่องนี้, ช่องปลายทาง)} 2=มี 1=ยังไม่รู้ 0=โล่ง +
+        มีกำแพงที่ปลายช่องปลายทางไหม (ToF ก่อนเดิน)"""
+        x, y = self.r.cell
+        nx, ny = x + DX[d], y + DY[d]
+        walls = {}
+        for s in ((d + 1) % 4, (d + 3) % 4):
+            def code(cx, cy):
+                if not self.m.in_bounds(cx, cy):
+                    return 0
+                st = self.m.state(cx, cy, s)
+                return 2 if st == WALL else (0 if st == OPEN else 1)
+            walls[s] = (code(x, y), code(nx, ny))
+        front = before_mm < C.WALL_EXPECT_MM + self.m.cell_m * 1000 + 150
+        return walls, front
+
+    def _lat_wall(self, d):
+        """เดิน E/W (สไลด์): ทิศ N/S ที่มีกำแพงให้ ToF ใช้คุมกลางระหว่างเดิน (ช่องนี้+ช่องปลายทาง มีกำแพงมากสุด,
+        เท่ากันเอาช่องนี้ก่อน) ; เดิน N/S หรือไม่มีกำแพงเลย -> None (N/S ใช้ Sharp ซ้าย/ขวาเอง)"""
+        if d in (0, 2):
+            return None
+        x, y = self.r.cell
+        nx, ny = x + DX[d], y + DY[d]
+        best, score = None, 0
+        for s in (0, 2):
+            here = self.m.state(x, y, s) == WALL
+            there = self.m.in_bounds(nx, ny) and self.m.state(nx, ny, s) == WALL
+            sc = 2 * here + there + (1 if here and there else 0)
+            if sc > score:
+                best, score = s, sc
+        return best
+
+    # ---- ตัววัดระยะที่เดินได้ (ใช้ตัวที่เชื่อได้ที่สุดตัวเดียว) ----
+    def _abs_front(self, d, after):
+        """ToF หน้าหลังเดินเห็นกำแพงขอบไกลของช่องใหม่ (อ่านได้ < EXPECT + ABS_REF_FRAC*ช่อง และแผนที่ไม่ได้บอกว่า
+        ขอบนั้นโล่ง) -> ระยะที่ยังต้องเดิน (mm, + = ยังไม่ถึง / - = เลย) เทียบ EXPECT ตรงๆ ; ไม่ใช่ -> None"""
+        x, y = self.r.cell
+        if after >= C.WALL_EXPECT_MM + C.ABS_REF_FRAC * self.m.cell_m * 1000:
+            return None
+        if self.m.in_bounds(x, y) and self.m.state(x, y, d) == OPEN:
+            return None
+        return after - C.WALL_EXPECT_MM
+
+    def _odo_moved(self, d):
+        """ระยะ (mm) ที่เดินจริงตาม odometry (หาร scale ที่เรียนได้ของสนามนี้) ; ใช้ไม่ได้ -> None"""
+        odo = self.r.moved_along(d)
+        if odo is None:
+            return None
+        return odo * 1000 / self._odo_k(0 if d in (1, 3) else 1)
+
+    def _check_yaw(self, d):
+        ok = getattr(self.r, "yaw_ok", None)
+        if ok is not None and not ok():
+            self.L.log(self.r, "yaw_warn", note=f"หลังเดิน {DIRS[d]} มุมตัวถังเพี้ยน {self.r.yaw():.1f}° "
+                                                f"(ชน/IMU กระโดด) -> ไม่ใช้ odometry ก้าวนี้ ; แก้มุม")
+            self.r.correct_yaw()
+
+    def _pred_front(self, d, before_mm):
+        """ToF หน้าที่ควรอ่านได้ตอนนี้ตาม odometry = ค่าก่อนเดิน (อ่านตอนหุ่นนิ่ง แม่น) - ระยะที่เดินไป ; ไม่รู้ -> None"""
+        if before_mm is None or before_mm > C.MOVE_TOPUP_RANGE_MM:
+            return None
+        moved = self._odo_moved(d)
+        if moved is None:
+            return None
+        return max(C.TOF_BLIND_ZONE_MM, before_mm - moved)
+
+    def _front_after_move(self, d, before_mm):
+        """ToF หน้าหลังเดิน/ขยับ: ToF หน่วง - ทันทีหลังเดินเร็วยังอ่านยาวกว่าจริง ~110mm แล้วค่อยๆ ลดลง
+        (log 30/9 20:57: (4,5)/(3,2)/(1,5) อ่าน 317-382 ทั้งที่จริง ~200-270 -> เติมตามนั้นแล้วชนกำแพงหน้า ToF=60)
+        -> อ่านซ้ำจนค่าไม่ลดลงแล้ว + ถ้ายังยาวกว่าที่ odometry ทำนายเกิน TOF_LAG_MAX_MM ใช้ค่าทำนาย (ใกล้กว่า = ไม่ชน)"""
+        a = self.r.read_dir(d)
+        for _ in range(C.TOF_LAG_READS):
+            time.sleep(C.TOF_LAG_WAIT_S)
+            b = self.r.read_dir(d)
+            done = abs(b - a) < C.TOF_LAG_TOL_MM
+            a = b
+            if done:
+                break
+        pred = self._pred_front(d, before_mm)
+        x, y = self.r.cell
+        if self.m.in_bounds(x, y) and self.m.state(x, y, d) == OPEN:
+            pred = None                     # ข้างหน้าช่องนี้โล่ง (แผนที่รู้แล้ว) = ไม่มีกำแพงให้ชน ไม่ต้องกัน
+        if pred is not None and a > pred + C.TOF_LAG_MAX_MM and a < C.TOF_MAX_VALID_MM:
+            self.L.log(self.r, "tof_lag", {d: a},
+                       note=f"ToF หน้า {DIRS[d]} อ่าน {a:.0f}mm แต่ odometry บอกควรเหลือ {pred:.0f}mm "
+                            f"(ก่อนเดิน {before_mm:.0f}) -> ใช้ {pred:.0f} (กันชน)")
+            a = pred
+        return a
+
+    def _finish_move(self, d, after, dist_mm, before_mm=None):
+        """ช่วงสุดท้าย (ช้า, SHIFT_SPEED) ให้ถึงกลางช่องใหม่พอดี -> ToF หน้าล่าสุด
+        มีกำแพงหน้า: เทียบ EXPECT ตรงๆ ; ไม่มี: odometry (scale ของสนาม) ; ไม่รู้ทั้งคู่: ไม่ขยับ (recenter ดูแลต่อ)"""
+        E = C.WALL_EXPECT_MM
+        for _ in range(C.MOVE_TOPUP_TRIES):
+            rest = self._abs_front(d, after)
+            how = "กำแพงหน้า"
+            if rest is None:
+                moved = self._odo_moved(d)
+                if moved is None:
+                    break
+                rest, how = dist_mm - moved, "odometry"
+                if after < C.TOF_MAX_VALID_MM:
+                    rest = min(rest, after - E)          # ห้ามเข้าใกล้สิ่งที่ ToF เห็นข้างหน้าเกิน EXPECT
+                rest = min(rest, C.ODOM_TOPUP_MAX_MM)
+            if -C.MOVE_OVERSHOOT_MIN_MM < rest < C.MOVE_TOPUP_MIN_MM:
+                break
+            mv = max(-C.RECENTER_MAX_MM, min(C.MOVE_TOPUP_MAX_MM, rest)) / 1000.0
+            self.r.shift(DX[d] * mv, DY[d] * mv)
+            prev, after = after, self._front_after_move(d, before_mm)
+            self.L.log(self.r, "overshoot" if mv < 0 else "topup", {d: after},
+                       note=f"เดิน {DIRS[d]}: ขาด {rest:+.0f}mm ({how}) -> {'ถอย' if mv < 0 else 'เติม'} "
+                            f"{abs(mv) * 1000:.0f}mm ToF {prev:.0f}->{after:.0f}mm")
+            if abs(mv) >= 0.08 and abs(prev - after) < 0.25 * abs(mv) * 1000 and after < C.TOF_MAX_VALID_MM:
+                self.r.recover_chassis()        # สั่งแล้วไม่ขยับ = action เก่าค้าง/ติด -> หยุดล้อ ไม่ดันต่อ
+                break
+        return after
+
+    def _arrived(self, d, before_mm, after, dist_mm, rel_ok):
+        """ถึงช่องใหม่จริงไหม -> (ถึง, ToF, เหตุผลถ้าไม่ถึง)
+        กำแพงหน้าของช่องใหม่อยู่ที่ ~EXPECT = ถึงแน่ ; ToF ก่อน-หลัง (ค่าก่อนเดินไม่ไกล) ; ไม่งั้น odometry"""
+        need = C.MOVE_ACCEPT_FRAC * dist_mm
+        rest = self._abs_front(d, after)
+        if rest is not None and rest < 0.4 * self.m.cell_m * 1000:
+            return True, after, ""
+        if rel_ok:
+            if before_mm - after < need:
+                again = self.r.read_dir(d)          # อ่านซ้ำ 1 ครั้งก่อนสรุปว่าไม่ถึง
+                after = min(after, again)
+            if before_mm - after >= need:
+                return True, after, ""
+            # ToF ระยะ ~1 ม. คลาดได้ 200mm -> ถ้า odometry บอกว่าเดินครบ และ ToF ยืนยันว่าขยับจริงอย่างน้อยครึ่งหนึ่ง
+            # (ไม่ใช่ล้อหมุนฟรีอยู่กับที่) = ถึง ; ไม่งั้นถอยกลับทั้งที่ถึงแล้ว
+            moved = self._odo_moved(d)
+            if moved is not None and moved >= need and before_mm - after >= 0.5 * need:
+                return True, after, ""
+            return False, after, (f"ToF ขยับ {before_mm - after:.0f}mm"
+                                  + (f" odometry {moved:.0f}mm" if moved is not None else "")
+                                  + f" (ต้อง ≥{need:.0f})")
+        moved = self._odo_moved(d)
+        if moved is None or moved >= need:
+            return True, after, ""
+        return False, after, f"odometry {moved:.0f}mm (ต้อง ≥{need:.0f})"
+
+    def _fix_lateral(self, d):
+        """หลังเดิน: เยื้องด้านข้าง (ตั้งฉากทิศเดิน) ที่เกิดระหว่างเดิน/ไถล ตาม odometry -> ขยับคืน
+        (log 30/9 15:47: ช่องโล่งไม่มีกำแพงข้างให้วัด เยื้องสะสม -> เข้าช่องแคบ (3,3) แล้วชนปลายกำแพง)"""
+        lat = getattr(self.r, "moved_lateral", None)
+        lat = lat(d) if lat else None
+        if lat is None or abs(lat) * 1000 < C.LATERAL_FIX_MM:
+            return
+        mv = max(-C.LATERAL_FIX_MAX_MM, min(C.LATERAL_FIX_MAX_MM, -lat * 1000)) / 1000.0
+        r = (d + 1) % 4
+        self.r.shift(DX[r] * mv, DY[r] * mv)
+        self.L.log(self.r, "lateral_fix", note=f"เดิน {DIRS[d]} แล้วเยื้องข้าง {lat * 1000:+.0f}mm (odometry) "
+                                               f"-> ขยับคืน {abs(mv) * 1000:.0f}mm")
+
+    def _push_rest(self, d, after, dist_mm, before_mm=None):
+        """เดินค้างกลางทาง (ข้ามรอยต่อพื้นไม่ผ่าน/คำสั่ง timeout) แต่ข้างหน้ายังโล่งพอ -> หยุดล้อ แล้วเดินส่วนที่เหลือ
+        ด้วยความเร็วเดิน (มีแรงส่งข้ามรอยต่อ) อีก 1 ครั้ง -> (ถึงไหม, ToF ล่าสุด)
+        ต้องรู้ระยะที่เดินได้แน่ (odometry ใช้ได้) ; ไม่เกิน PUSH_REST_MAX_MM ; ห้ามเข้าใกล้ข้างหน้าเกิน EXPECT"""
+        moved = self._odo_moved(d)
+        if moved is None:
+            return False, after
+        rest = min(dist_mm - moved, C.PUSH_REST_MAX_MM)
+        if after < C.TOF_MAX_VALID_MM:
+            rest = min(rest, after - C.WALL_EXPECT_MM)
+        if rest < 0.2 * dist_mm:
+            return False, after
+        self.r.recover_chassis()
+        self.r.shift(DX[d] * rest / 1000.0, DY[d] * rest / 1000.0, speed=C.XY_SPEED)
+        prev_after, after = after, self._front_after_move(d, before_mm)
+        after = self._finish_move(d, after, dist_mm, before_mm) if C.MOVE_TOPUP else after
+        m2 = self._odo_moved(d)
+        ok = (m2 is not None and m2 >= C.MOVE_ACCEPT_FRAC * dist_mm) or (
+            self._abs_front(d, after) is not None and self._abs_front(d, after) < 0.4 * self.m.cell_m * 1000)
+        self.L.log(self.r, "push_rest", {d: after},
+                   note=f"เดิน {DIRS[d]} ค้างที่ {moved:.0f}/{dist_mm:.0f}mm -> หยุดล้อแล้วเดินต่อ {rest:.0f}mm "
+                        f"(ToF {prev_after:.0f}->{after:.0f}mm) {'ถึงแล้ว' if ok else 'ยังไม่ถึง'}")
+        return ok, after
+
+    def _plan_move(self, d, before_mm):
+        """ระยะที่จะสั่งเดินไปทิศ d -> (mm, ระยะหน้าที่ใช้, note)
+        ห้ามเดินไกลกว่าที่กำแพง/สิ่งกีดขวางข้างหน้าเหลือให้: เดิน min(1 ช่อง, ระยะหน้า - EXPECT)
+        = ถ้าหุ่นล้ำไปข้างหน้าอยู่แล้ว จะเดินสั้นลงไปจอดกลางช่องปลายทางพอดี (log 30/9 14:11: (4,1) หน้า S 503
+        แทน ~795 = ล้ำไป 29 ซม. แต่เดินเต็ม 630mm -> ชนกำแพง ; เดิมถอยก่อนเดินได้เฉพาะล้ำ 60-200mm)
+        ลดระยะได้อย่างเดียว ไม่เดินเกิน 1 ช่อง: ToF ด้านข้างระยะ ~800-950 เคยอ่านยาวเกินจริง ~11 ซม.
+        ((2,5) E=930 ทั้งที่กำแพง W บอกเยื้องแค่ 2 ซม.) ขาดเท่าไร _finish_move เติมหลังเดิน"""
         cell_mm = self.m.cell_m * 1000
-        lean = cell_mm + C.WALL_EXPECT_MM - before_mm
-        # ล้ำได้แค่ 60-200mm เท่านั้นที่เชื่อว่าเป็นกำแพงไกลของช่องถัดไป - ใกล้กว่านั้นอาจเป็น
-        # กำแพงขอบช่องนี้เองที่หุ่นอยู่ห่าง (log 28/9 00:43: หน้า 488 ถูกตีเป็นล้ำ 322 -> ถอย แล้วชน)
-        if not C.PREMOVE_BACKOFF or not (60 <= lean <= 200):
-            return before_mm
-        # ยืนยันด้วยค่าอ่านสดอีกครั้ง: before_mm อาจมาจาก last_tof ที่ sense ใส่ค่าหลอก th+1
-        # ไว้ (ToF/Sharp ขัดกัน) ซึ่งตกช่วงนี้พอดี (log 28/9: 425/454mm) -> ห้ามถอยตามค่านั้น
-        fresh = self.r.read_dir(d)
-        if abs(fresh - before_mm) > 60:
-            return before_mm
-        before_mm = (before_mm + fresh) / 2.0
-        lean = cell_mm + C.WALL_EXPECT_MM - before_mm
-        if not (60 <= lean <= 200):
-            return before_mm
-        back = min(lean, C.RECENTER_MAX_MM) / 1000.0
-        self.r.shift(-DX[d] * back, -DY[d] * back)
-        new = self.r.read_dir(d)
-        if abs(new - (before_mm + back * 1000)) > 100:
-            new = before_mm + back * 1000       # ค่าอ่านใหม่แปลก -> ใช้ค่าคำนวณ
-        self.L.log(self.r, "premove_backoff", {d: new},
-                   note=f"หน้า {DIRS[d]} {before_mm:.0f}mm (ควร ~{cell_mm + C.WALL_EXPECT_MM:.0f}) "
-                        f"-> ถอย {back * 1000:.0f}mm ก่อนเดิน")
-        return new
+        E = C.WALL_EXPECT_MM
+
+        def dist_of(front):
+            return max(0.2 * cell_mm, min(cell_mm, front - E))
+
+        dist = dist_of(before_mm)
+        if cell_mm - dist > 60:
+            # จะเดินสั้นกว่า 1 ช่องมาก -> ยืนยันด้วยค่าอ่านสดอีก 2 ครั้ง (ค่าเดิมอาจเป็นค่าหลอก th+1 จาก sense)
+            before_mm = sorted([before_mm, self.r.read_dir(d), self.r.read_dir(d)])[1]
+            dist = dist_of(before_mm)
+        note = ""
+        if cell_mm - dist >= 40:
+            note = (f"หน้า {DIRS[d]} {before_mm:.0f}mm -> เดินแค่ {dist:.0f}mm (ปกติ {cell_mm:.0f}) "
+                    f"ให้จอดกลางช่องปลายทาง ไม่ชนกำแพง")
+        return dist, before_mm, note
 
     def _fail_move(self, prev, event, tof, note):
         """เดินไม่สำเร็จ: ย้อนตำแหน่งจริงตาม odometry + ย้อนสถานะ แล้วสแกน **โดยไม่อัปเดตแผนที่**
@@ -416,35 +739,17 @@ class Explorer:
         self.r.undo_last_move()
         self.r.cell = prev
         self.last_tof = {}
-        self.sense(update_map=False, event="scan_after_fail")
-
-    def _top_up(self, d, before_mm, after):
-        """เดินเพิ่มไปทิศ d จนระยะที่ขยับจริง (ToF ก่อน-หลัง) ใกล้ CELL_M ; คืนค่า ToF ล่าสุด"""
-        cell_mm = self.m.cell_m * 1000
-        for _ in range(C.MOVE_TOPUP_TRIES):
-            # ห้ามเติมจนใกล้กำแพงข้างหน้าเกิน WALL_EXPECT_MM (log 2026-09-27: หน้า 466mm
-            # เดินได้ 406mm แล้วยังสั่งเติมอีก 194mm x2 -> ดันชนกำแพง ToF อ่าน 60)
-            short = min(cell_mm - (before_mm - after), after - C.WALL_EXPECT_MM)
-            if short < C.MOVE_TOPUP_MIN_MM:
-                break
-            add = min(short, C.MOVE_TOPUP_MAX_MM) / 1000.0
-            self.r.shift(DX[d] * add, DY[d] * add)
-            prev_after, after = after, self.r.read_dir(d)
-            if after > prev_after + C.MOVE_TOPUP_MIN_MM:
-                # เติมแล้วไกลขึ้น = ToF ชี้หลุด/หุ่นเบี้ยว (log 27/9 20:46: ToF กระโดด 3000
-                # แล้วคิดว่าขาด 2774mm) -> หยุดเติม
-                self.L.log(self.r, "topup", {d: after},
-                           note=f"เติมแล้วระยะไกลขึ้น ({prev_after:.0f}->{after:.0f}mm) - หยุดเติม")
-                break
-            self.L.log(self.r, "topup", {d: after},
-                       note=f"เดิน {DIRS[d]} ขาด {short:.0f}mm -> เติม {add * 1000:.0f}mm")
-        return after
+        self._sense_no_look(update_map=False, event="scan_after_fail")
 
     def _sense_here(self, update_map=True, event="scan"):
         obs = self.sense(update_map, event)
         self.last_tof["_cell"] = self.r.cell
+        if update_map and C.ALIGN_ENABLE and hasattr(self.r, "wall_skew") and not self.stopped():
+            self._align_heading()           # หลังจัดกลางแล้ว: แก้ตัวถังเอียงเทียบกำแพงจริง (ก่อนยิง/เดินต่อ)
         if self.hunter is not None and not self.stopped():
             self.hunter.after_scan()        # ยิงป้ายที่เห็นระหว่างสแกนช่องนี้ (ถ้าอยู่ในระยะ)
+            if update_map and not self.stopped() and hasattr(self.hunter, "engage_close"):
+                self.hunter.engage_close(self.r.heading)   # หลังจัดกลางแล้ว: ก้มดูกำแพงชิดด้านที่สไลด์ผ่าน
         return obs
 
     def follow(self, path, rescan=True):
@@ -454,11 +759,50 @@ class Explorer:
                 return False
             if not self.step(d):
                 return False
-            if rescan:
+            x, y = self.r.cell
+            if rescan and C.LIGHT_RESCAN and self.m.visited[x][y]:
+                self.light_sense()          # ช่องที่เคยสแกนครบแล้ว: อ่านแค่ทิศที่ใช้จัดกึ่งกลาง
+            elif rescan:
                 self._sense_here()
             else:
                 self.r.correct_yaw()
         return True
+
+    def light_sense(self):
+        """ผ่านช่องที่เคยสแกนครบแล้ว (เดินย้อน): ไม่สแกน 4 ทิศ/ไม่หาป้าย/ไม่อ่านซ้ำ อ่าน ToF เฉพาะทิศที่มีกำแพง
+        (หรือกำแพงไกลของช่องถัดไป) ไว้จัดกึ่งกลาง  (log 30/9: สแกน 26 ครั้งใน 20 ช่อง ครั้งละ ~6 วิ)
+        ถ้ากำแพงที่แผนที่บอกว่ามี กลับอ่านได้ว่าโล่ง = ตำแหน่งอาจผิด -> สแกนเต็มแทน"""
+        x, y = self.r.cell
+        th = C.WALL_THRESHOLD_MM
+        self.r.correct_yaw()
+        dirs = []
+        for pos, neg in ((0, 2), (1, 3)):
+            near = [d for d in (pos, neg) if self.m.state(x, y, d) == WALL]
+            if near:
+                dirs += near
+                continue
+            for d in (pos, neg):
+                nx, ny = x + DX[d], y + DY[d]
+                if (self.m.in_bounds(nx, ny) and self.m.state(x, y, d) == OPEN
+                        and self.m.state(nx, ny, d) == WALL):
+                    dirs.append(d)
+        tof = {d: self.r.read_dir(d) for d in dirs}
+        bad = [d for d in dirs if self.m.state(x, y, d) == WALL and tof[d] >= th]
+        if bad:
+            self.L.log(self.r, "light_scan", tof,
+                       note=f"กำแพง {''.join(DIRS[d] for d in bad)} ในแผนที่อ่านได้โล่ง -> สแกนเต็ม")
+            return self._sense_here()
+        self.last_tof = dict(tof)
+        self.last_tof["_cell"] = (x, y)
+        self.L.log(self.r, "light_scan", tof)
+        if C.RECENTER:
+            self.recenter(tof)
+        if C.ALIGN_ENABLE and hasattr(self.r, "wall_skew") and not self.stopped():
+            self._align_heading(tof, light=True)     # ขากลับ/รอบ 2 ก็แก้เอียง (log 1/10: ตอนท้ายเอียงสะสม)
+        if self.hunter is not None and not self.stopped():
+            self.hunter.look_walls()        # ช่องนี้ยังไม่เคยส่องกำแพงที่อยู่ระยะยิงพอดี -> ส่องหาป้าย
+            self.hunter.after_scan()        # ยิงป้ายที่เพิ่งเห็น + ป้ายที่รู้ตำแหน่งแล้ว (รวมขยับเข้าถ้าไกลเกินนิด)
+        self.on_update()
 
     # ------------------------------------------------------------ MISSIONS
     def explore(self):
@@ -489,6 +833,8 @@ class Explorer:
             self.plan = self._cells_of(path)
             self.echo(f"frontier -> {tgt}  path={''.join(DIRS[d] for d in path)}")
             self.follow(path, rescan=True)
+            if self.hunter is not None and not self.stopped() and getattr(self.hunter, "close_queue", None):
+                self.hunter.resolve_close()     # ป้ายกำแพงชิดที่เพิ่งเจอ -> ถอยไปยิงจากช่องแนวตรง แล้วสำรวจต่อ
         if self.hunter is not None and not self.stopped():
             self.hunter.sweep()             # ยังมีเป้าที่ต้องยิงค้าง -> ไปช่องยิงก่อนกลับบ้าน
         if C.RETURN_HOME and not self.stopped():
@@ -612,8 +958,16 @@ class Explorer:
         self.L.log(self.r, "parked", note=f"PARKED at {self.r.cell} heading={hd} - รอคำสั่ง")
         self.on_update()
 
+    def _sense_no_look(self, **kw):
+        """สแกนตอนไม่แน่ใจตำแหน่ง (เดินพลาด/หาตำแหน่ง) -> ไม่หาป้าย (ตำแหน่งป้ายจะผิดตาม)"""
+        look, self.r.on_look = getattr(self.r, "on_look", None), None
+        try:
+            return self.sense(**kw)
+        finally:
+            self.r.on_look = look
+
     def where_am_i(self):
-        obs = self.sense(update_map=False, event="relocalize")
+        obs = self._sense_no_look(update_map=False, event="relocalize")
         cands = self.m.match_candidates(tuple(obs[d] for d in range(4)))
         return obs, cands
 
