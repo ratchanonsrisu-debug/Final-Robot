@@ -1,0 +1,5 @@
+time_s,round,target,color,shape,from_cell,target_cell,dir,cells_away,dist_cm,err_yaw,err_pitch,triggers,burst,fired,knocked,note,images
+195.9,1,5,BLUE,HORIZONTAL,"0,5","1,5",E,1,62.7,-0.01,-0.11,1,3,1,,fired,095557_BLUE_HORIZONTAL_t1_a_aim.jpg 095559_BLUE_HORIZONTAL_t1_b_after.jpg
+71.7,2,5,BLUE,HORIZONTAL,"0,5","1,5",E,1,64.7,0.04,-0.25,1,3,1,,fired,100404_BLUE_HORIZONTAL_t1_a_aim.jpg 100406_BLUE_HORIZONTAL_t1_b_after.jpg
+151.8,2,13,BLUE,HORIZONTAL,"4,5","5,5",E,1,50.0,0,0,0,,0,,ไม่ยิง: ป้ายที่ล็อคห่างจากเป้า 20 ซม. (ป้ายข้างๆ?),
+156.7,2,13,BLUE,HORIZONTAL,"4,5","5,5",E,1,50.5,0,0,0,,0,,ไม่ยิง: ป้ายที่ล็อคห่างจากเป้า 20 ซม. (ป้ายข้างๆ?),

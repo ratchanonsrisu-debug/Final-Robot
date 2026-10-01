@@ -1,0 +1,45 @@
+===== Assignment 2 : Explore + Shoot Targets (SLAM + Color Sign Shooter) =====
+Grid           : 6 x 6  (cell 0.60 m)
+Start          : cell (1, 0)  heading N
+End            : cell (3, 1)
+Visited cells  : 24 / 36
+Coverage       : 66.67 %
+Correct cells  : 23 / 36
+Map Accuracy   : 63.89 %
+Edge accuracy  : 84.52 %  (per wall segment)
+Walls GT/detected/matched : 44 / 41 / 40
+Wrong cells    : [(1, 0), (2, 0), (2, 1), (2, 2), (2, 3), (3, 0), (3, 3), (4, 0), (4, 1), (4, 3), (4, 4), (5, 0), (5, 1)]
+Targets found  : 18  (must shoot 3, fired 1, knocked 0)
+  #1  GREEN  CIRCLE     (0.52, 0.17) m cell (0, 0)  skip  -
+  #4  BLUE   HORIZONTAL (1.43, 3.58) m cell (2, 5)  MUST  -
+  #5  BLUE   HORIZONTAL (0.92, 3.16) m cell (1, 5)  MUST  FIRED
+  #6  RED    CIRCLE     (1.01, 2.98) m cell (1, 4)  skip  -
+  #7  YELLOW HORIZONTAL (0.95, 3.28) m cell (1, 5)  skip  -
+  #8  RED    SQUARE     (0.99, 3.42) m cell (1, 5)  skip  -
+  #9  YELLOW HORIZONTAL (2.32, 1.96) m cell (3, 3)  skip  -
+  #10 BLUE   VERTICAL   (1.99, 1.97) m cell (3, 3)  skip  -
+  #11 YELLOW SQUARE     (2.15, 1.98) m cell (3, 3)  skip  -
+  #12 YELLOW CIRCLE     (1.86, 1.95) m cell (3, 3)  skip  -
+  #13 BLUE   HORIZONTAL (3.52, 3.27) m cell (5, 5)  MUST  -
+  #14 RED    VERTICAL   (3.54, 3.12) m cell (5, 5)  skip  -
+  #15 RED    HORIZONTAL (3.54, 3.45) m cell (5, 5)  skip  -
+  #16 YELLOW VERTICAL   (1.37, 3.26) m cell (2, 5)  skip  -
+  #18 GREEN  SQUARE     (1.35, 3.42) m cell (2, 5)  skip  -
+  #21 GREEN  VERTICAL   (3.39, 3.46) m cell (5, 5)  skip  -
+  #22 BLUE   SQUARE     (3.24, 3.43) m cell (5, 5)  skip  -
+  #23 GREEN  CIRCLE     (3.09, 3.52) m cell (5, 5)  skip  -
+
+ASCII map ( | --- = wall, ? = unknown, . = visited ):
++---+---+---+---+---+---+
+| .   . | .   .   .   . |
++   +   +---+   +---+   +
+| .   .   .   . |   | . |
++   +---+---+   + ? +   +
+| .   .     ?   ?     . |
++   +   + ? +---+---+   +
+| .   .       .   .   . |
++   +   + ? +   +---+---+
+| . | . |   | . |   ?   |
++   +   + ? +   + ? + ? +
+| . | . |   ?   ?   ?   |
++---+---+---+---+---+---+

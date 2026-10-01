@@ -1,0 +1,22 @@
+===== Assignment 2 : Explore + Shoot Targets (SLAM + Color Sign Shooter) =====
+Grid           : 6 x 6  (cell 0.60 m)
+Start          : cell (1, 0)  heading N
+End            : cell (0, 2)
+Visited cells  : 4 / 36
+Coverage       : 11.11 %
+Map Accuracy   : (no ground truth yet — enter it in the GUI and press Evaluate)
+
+ASCII map ( | --- = wall, ? = unknown, . = visited ):
++---+---+---+---+---+---+
+|   ?   ?   ?   ?   ?   |
++ ? + ? + ? + ? + ? + ? +
+|   ?   ?   ?   ?   ?   |
++ ? + ? + ? + ? + ? + ? +
+|   ?   ?   ?   ?   ?   |
++   +   + ? + ? + ? + ? +
+| .   .     ?   ?   ?   |
++   +   + ? + ? + ? + ? +
+|   | . |   ?   ?   ?   |
++ ? +   + ? + ? + ? + ? +
+|   | . |   ?   ?   ?   |
++---+---+---+---+---+---+

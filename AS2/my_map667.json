@@ -1,0 +1,735 @@
+{
+ "grid_w": 6,
+ "grid_h": 6,
+ "cell_m": 0.6,
+ "boundary_walls": true,
+ "V_logodds": [
+  [
+   6.0,
+   6.0,
+   6.0,
+   6.0,
+   6.0,
+   6.0
+  ],
+  [
+   -3.0,
+   -2.0,
+   -2.0,
+   -2.0,
+   -2.0,
+   -2.0
+  ],
+  [
+   -2.0,
+   -2.0,
+   -2.0,
+   -2.0,
+   2.0,
+   2.0
+  ],
+  [
+   -2.0,
+   2.0,
+   -2.0,
+   -2.0,
+   -2.0,
+   -2.0
+  ],
+  [
+   -2.0,
+   2.0,
+   -2.0,
+   -1.0,
+   2.0,
+   2.0
+  ],
+  [
+   2.0,
+   -2.0,
+   -2.0,
+   2.0,
+   -2.0,
+   -2.0
+  ],
+  [
+   6.0,
+   6.0,
+   6.0,
+   6.0,
+   6.0,
+   6.0
+  ]
+ ],
+ "H_logodds": [
+  [
+   6.0,
+   -3.0,
+   2.0,
+   -2.0,
+   2.0,
+   -2.0,
+   6.0
+  ],
+  [
+   6.0,
+   -2.0,
+   -2.0,
+   -2.0,
+   -2.0,
+   -2.0,
+   6.0
+  ],
+  [
+   6.0,
+   -2.0,
+   2.0,
+   -2.0,
+   -2.0,
+   -2.0,
+   6.0
+  ],
+  [
+   6.0,
+   -2.0,
+   -2.0,
+   2.0,
+   2.0,
+   -2.0,
+   6.0
+  ],
+  [
+   6.0,
+   -2.0,
+   -2.0,
+   -2.0,
+   -2.0,
+   -2.0,
+   6.0
+  ],
+  [
+   6.0,
+   1.0,
+   2.0,
+   2.0,
+   -2.0,
+   -2.0,
+   6.0
+  ]
+ ],
+ "visited": [
+  [
+   true,
+   true,
+   true,
+   true,
+   true,
+   true
+  ],
+  [
+   true,
+   true,
+   true,
+   true,
+   true,
+   true
+  ],
+  [
+   true,
+   true,
+   true,
+   true,
+   true,
+   true
+  ],
+  [
+   true,
+   true,
+   true,
+   true,
+   true,
+   true
+  ],
+  [
+   true,
+   true,
+   true,
+   true,
+   true,
+   true
+  ],
+  [
+   false,
+   true,
+   true,
+   true,
+   true,
+   true
+  ]
+ ],
+ "start": [
+  0,
+  0,
+  "N"
+ ],
+ "end": [
+  5,
+  1,
+  "E"
+ ],
+ "cells": [
+  {
+   "x": 0,
+   "y": 0,
+   "visited": true,
+   "N": "OPEN",
+   "E": "OPEN",
+   "S": "WALL",
+   "W": "WALL"
+  },
+  {
+   "x": 1,
+   "y": 0,
+   "visited": true,
+   "N": "OPEN",
+   "E": "OPEN",
+   "S": "WALL",
+   "W": "OPEN"
+  },
+  {
+   "x": 2,
+   "y": 0,
+   "visited": true,
+   "N": "OPEN",
+   "E": "OPEN",
+   "S": "WALL",
+   "W": "OPEN"
+  },
+  {
+   "x": 3,
+   "y": 0,
+   "visited": true,
+   "N": "OPEN",
+   "E": "OPEN",
+   "S": "WALL",
+   "W": "OPEN"
+  },
+  {
+   "x": 4,
+   "y": 0,
+   "visited": true,
+   "N": "OPEN",
+   "E": "WALL",
+   "S": "WALL",
+   "W": "OPEN"
+  },
+  {
+   "x": 5,
+   "y": 0,
+   "visited": false,
+   "N": "WALL",
+   "E": "WALL",
+   "S": "WALL",
+   "W": "WALL"
+  },
+  {
+   "x": 0,
+   "y": 1,
+   "visited": true,
+   "N": "WALL",
+   "E": "OPEN",
+   "S": "OPEN",
+   "W": "WALL"
+  },
+  {
+   "x": 1,
+   "y": 1,
+   "visited": true,
+   "N": "OPEN",
+   "E": "OPEN",
+   "S": "OPEN",
+   "W": "OPEN"
+  },
+  {
+   "x": 2,
+   "y": 1,
+   "visited": true,
+   "N": "WALL",
+   "E": "WALL",
+   "S": "OPEN",
+   "W": "OPEN"
+  },
+  {
+   "x": 3,
+   "y": 1,
+   "visited": true,
+   "N": "OPEN",
+   "E": "WALL",
+   "S": "OPEN",
+   "W": "WALL"
+  },
+  {
+   "x": 4,
+   "y": 1,
+   "visited": true,
+   "N": "OPEN",
+   "E": "OPEN",
+   "S": "OPEN",
+   "W": "WALL"
+  },
+  {
+   "x": 5,
+   "y": 1,
+   "visited": true,
+   "N": "WALL",
+   "E": "WALL",
+   "S": "WALL",
+   "W": "OPEN"
+  },
+  {
+   "x": 0,
+   "y": 2,
+   "visited": true,
+   "N": "OPEN",
+   "E": "OPEN",
+   "S": "WALL",
+   "W": "WALL"
+  },
+  {
+   "x": 1,
+   "y": 2,
+   "visited": true,
+   "N": "OPEN",
+   "E": "OPEN",
+   "S": "OPEN",
+   "W": "OPEN"
+  },
+  {
+   "x": 2,
+   "y": 2,
+   "visited": true,
+   "N": "OPEN",
+   "E": "OPEN",
+   "S": "WALL",
+   "W": "OPEN"
+  },
+  {
+   "x": 3,
+   "y": 2,
+   "visited": true,
+   "N": "WALL",
+   "E": "OPEN",
+   "S": "OPEN",
+   "W": "OPEN"
+  },
+  {
+   "x": 4,
+   "y": 2,
+   "visited": true,
+   "N": "OPEN",
+   "E": "OPEN",
+   "S": "OPEN",
+   "W": "OPEN"
+  },
+  {
+   "x": 5,
+   "y": 2,
+   "visited": true,
+   "N": "WALL",
+   "E": "WALL",
+   "S": "WALL",
+   "W": "OPEN"
+  },
+  {
+   "x": 0,
+   "y": 3,
+   "visited": true,
+   "N": "WALL",
+   "E": "OPEN",
+   "S": "OPEN",
+   "W": "WALL"
+  },
+  {
+   "x": 1,
+   "y": 3,
+   "visited": true,
+   "N": "OPEN",
+   "E": "OPEN",
+   "S": "OPEN",
+   "W": "OPEN"
+  },
+  {
+   "x": 2,
+   "y": 3,
+   "visited": true,
+   "N": "OPEN",
+   "E": "OPEN",
+   "S": "OPEN",
+   "W": "OPEN"
+  },
+  {
+   "x": 3,
+   "y": 3,
+   "visited": true,
+   "N": "WALL",
+   "E": "OPEN",
+   "S": "WALL",
+   "W": "OPEN"
+  },
+  {
+   "x": 4,
+   "y": 3,
+   "visited": true,
+   "N": "OPEN",
+   "E": "WALL",
+   "S": "OPEN",
+   "W": "OPEN"
+  },
+  {
+   "x": 5,
+   "y": 3,
+   "visited": true,
+   "N": "OPEN",
+   "E": "WALL",
+   "S": "WALL",
+   "W": "WALL"
+  },
+  {
+   "x": 0,
+   "y": 4,
+   "visited": true,
+   "N": "OPEN",
+   "E": "OPEN",
+   "S": "WALL",
+   "W": "WALL"
+  },
+  {
+   "x": 1,
+   "y": 4,
+   "visited": true,
+   "N": "OPEN",
+   "E": "WALL",
+   "S": "OPEN",
+   "W": "OPEN"
+  },
+  {
+   "x": 2,
+   "y": 4,
+   "visited": true,
+   "N": "OPEN",
+   "E": "OPEN",
+   "S": "OPEN",
+   "W": "WALL"
+  },
+  {
+   "x": 3,
+   "y": 4,
+   "visited": true,
+   "N": "OPEN",
+   "E": "WALL",
+   "S": "WALL",
+   "W": "OPEN"
+  },
+  {
+   "x": 4,
+   "y": 4,
+   "visited": true,
+   "N": "OPEN",
+   "E": "OPEN",
+   "S": "OPEN",
+   "W": "WALL"
+  },
+  {
+   "x": 5,
+   "y": 4,
+   "visited": true,
+   "N": "OPEN",
+   "E": "WALL",
+   "S": "OPEN",
+   "W": "OPEN"
+  },
+  {
+   "x": 0,
+   "y": 5,
+   "visited": true,
+   "N": "WALL",
+   "E": "OPEN",
+   "S": "OPEN",
+   "W": "WALL"
+  },
+  {
+   "x": 1,
+   "y": 5,
+   "visited": true,
+   "N": "WALL",
+   "E": "WALL",
+   "S": "OPEN",
+   "W": "OPEN"
+  },
+  {
+   "x": 2,
+   "y": 5,
+   "visited": true,
+   "N": "WALL",
+   "E": "OPEN",
+   "S": "OPEN",
+   "W": "WALL"
+  },
+  {
+   "x": 3,
+   "y": 5,
+   "visited": true,
+   "N": "WALL",
+   "E": "WALL",
+   "S": "OPEN",
+   "W": "OPEN"
+  },
+  {
+   "x": 4,
+   "y": 5,
+   "visited": true,
+   "N": "WALL",
+   "E": "OPEN",
+   "S": "OPEN",
+   "W": "WALL"
+  },
+  {
+   "x": 5,
+   "y": 5,
+   "visited": true,
+   "N": "WALL",
+   "E": "WALL",
+   "S": "OPEN",
+   "W": "OPEN"
+  }
+ ],
+ "meta": {
+  "targets": [
+   {
+    "id": 1,
+    "color": "RED",
+    "shape": "VERTICAL",
+    "cell": [
+     3,
+     1
+    ],
+    "n_obs": 5,
+    "spec": true,
+    "fired": false,
+    "knocked": null,
+    "triggers": 0,
+    "shot_from": [
+     3,
+     0
+    ],
+    "shot_dir": 0,
+    "locked": true,
+    "views": 2,
+    "confirmed": true,
+    "x_m": 1.857,
+    "y_m": 0.957
+   },
+   {
+    "id": 4,
+    "color": "BLUE",
+    "shape": "HORIZONTAL",
+    "cell": [
+     4,
+     0
+    ],
+    "n_obs": 4,
+    "spec": false,
+    "fired": false,
+    "knocked": null,
+    "triggers": 0,
+    "shot_from": null,
+    "shot_dir": null,
+    "locked": false,
+    "views": 4,
+    "confirmed": true,
+    "x_m": 2.729,
+    "y_m": 0.221
+   },
+   {
+    "id": 6,
+    "color": "RED",
+    "shape": "HORIZONTAL",
+    "cell": [
+     4,
+     1
+    ],
+    "n_obs": 7,
+    "spec": true,
+    "fired": false,
+    "knocked": null,
+    "triggers": 0,
+    "shot_from": [
+     5,
+     1
+    ],
+    "shot_dir": 3,
+    "locked": true,
+    "views": 1,
+    "confirmed": true,
+    "x_m": 2.562,
+    "y_m": 0.953
+   },
+   {
+    "id": 7,
+    "color": "RED",
+    "shape": "VERTICAL",
+    "cell": [
+     4,
+     5
+    ],
+    "n_obs": 8,
+    "spec": true,
+    "fired": false,
+    "knocked": null,
+    "triggers": 0,
+    "shot_from": [
+     4,
+     4
+    ],
+    "shot_dir": 0,
+    "locked": true,
+    "views": 5,
+    "confirmed": true,
+    "x_m": 2.814,
+    "y_m": 3.45
+   },
+   {
+    "id": 8,
+    "color": "BLUE",
+    "shape": "CIRCLE",
+    "cell": [
+     3,
+     3
+    ],
+    "n_obs": 3,
+    "spec": false,
+    "fired": false,
+    "knocked": null,
+    "triggers": 0,
+    "shot_from": null,
+    "shot_dir": null,
+    "locked": false,
+    "views": 3,
+    "confirmed": true,
+    "x_m": 1.939,
+    "y_m": 2.199
+   },
+   {
+    "id": 9,
+    "color": "RED",
+    "shape": "SQUARE",
+    "cell": [
+     2,
+     1
+    ],
+    "n_obs": 2,
+    "spec": false,
+    "fired": false,
+    "knocked": null,
+    "triggers": 0,
+    "shot_from": null,
+    "shot_dir": null,
+    "locked": false,
+    "views": 2,
+    "confirmed": true,
+    "x_m": 1.63,
+    "y_m": 0.841
+   },
+   {
+    "id": 10,
+    "color": "RED",
+    "shape": "VERTICAL",
+    "cell": [
+     3,
+     0
+    ],
+    "n_obs": 12,
+    "spec": true,
+    "fired": false,
+    "knocked": null,
+    "triggers": 0,
+    "shot_from": [
+     3,
+     1
+    ],
+    "shot_dir": 2,
+    "locked": true,
+    "views": 3,
+    "confirmed": true,
+    "x_m": 2.02,
+    "y_m": 0.207
+   },
+   {
+    "id": 11,
+    "color": "RED",
+    "shape": "VERTICAL",
+    "cell": [
+     5,
+     3
+    ],
+    "n_obs": 5,
+    "spec": true,
+    "fired": false,
+    "knocked": null,
+    "triggers": 0,
+    "shot_from": [
+     5,
+     4
+    ],
+    "shot_dir": 2,
+    "locked": true,
+    "views": 2,
+    "confirmed": true,
+    "x_m": 3.249,
+    "y_m": 2.01
+   },
+   {
+    "id": 14,
+    "color": "RED",
+    "shape": "CIRCLE",
+    "cell": [
+     1,
+     5
+    ],
+    "n_obs": 2,
+    "spec": true,
+    "fired": false,
+    "knocked": null,
+    "triggers": 0,
+    "shot_from": null,
+    "shot_dir": null,
+    "locked": false,
+    "views": 2,
+    "confirmed": true,
+    "x_m": 1.13,
+    "y_m": 3.189
+   },
+   {
+    "id": 10,
+    "color": "RED",
+    "shape": "SQUARE",
+    "cell": [
+     4,
+     1
+    ],
+    "n_obs": 6,
+    "spec": false,
+    "fired": false,
+    "knocked": null,
+    "triggers": 0,
+    "shot_from": null,
+    "shot_dir": null,
+    "locked": false,
+    "views": 1,
+    "confirmed": true,
+    "x_m": 2.441,
+    "y_m": 0.846
+   }
+  ]
+ }
+}

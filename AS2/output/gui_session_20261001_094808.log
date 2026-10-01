@@ -1,0 +1,473 @@
+[build] โฟลเดอร์: d:\ROBOT-Final\Final-Robot\AS2
+[build] แก้ล่าสุด: config.py 01/10 08:47:56, robots.py 01/10 08:26:21, explorer.py 01/10 08:25:18, gui.py 01/10 08:29:27
+[build] YAW_SIGN=-1 GIMBAL_RIGHT_YAW=90 WALL_EXPECT=192 THRESH=432 USE_SHARP=True MOVE_FACTOR=1.05/1.12
+[robot] กำลังเชื่อมต่อ RoboMaster (AP mode) ...
+[gimbal] yaw sign = +1 (รอบ 1/3: สั่ง moveto(yaw=+30) -> มุมเปลี่ยนจริง +30.2°)
+[robot] เชื่อมต่อสำเร็จ พร้อมใช้งาน
+[shooter] เปิดกล้อง 720p แล้ว
+[diag] Hz ก่อนเปิดกล้อง tof=19 att=20 pos=19 ang=20 | หลังเปิด tof=19 att=18 pos=19 ang=18
+[shooter] พร้อม (เป้าที่ต้องยิง = ตามตารางติ๊กในกล่อง 5)
+[REAL] เชื่อมต่อหุ่นจริงสำเร็จ: 6x6, เริ่ม (0,0) หัน N
+[robot] กำลังเชื่อมต่อ RoboMaster (AP mode) ...
+[gimbal] yaw sign = +1 (รอบ 1/3: สั่ง moveto(yaw=+30) -> มุมเปลี่ยนจริง +30.2°)
+[robot] เชื่อมต่อสำเร็จ พร้อมใช้งาน
+[shooter] เปิดกล้อง 720p แล้ว
+[diag] Hz ก่อนเปิดกล้อง tof=19 att=19 pos=19 ang=19 | หลังเปิด tof=19 att=19 pos=19 ang=19
+[shooter] พร้อม (เป้าที่ต้องยิง = ตามตารางติ๊กในกล่อง 5)
+[REAL] เชื่อมต่อหุ่นจริงสำเร็จ: 6x6, เริ่ม (0,0) หัน N
+ตั้งตำแหน่งหุ่น = (1,0) หัน N
+log -> d:\ROBOT-Final\Final-Robot\AS2\output\run_20261001_095123
+[shooter] หาป้าย=เปิด ยิงจริง=เปิด เป้า: BLUE:HORIZONTAL ระยะยิง 40-80 ซม.
+--- EXPLORE ---
+[yaw] ตั้งมุมอ้างอิง = -11.1°
+[start] START cell=(1, 0) heading=N
+[scan] !! S เป็นขอบสนามแต่อ่านโล่ง 1293mm (ตัวถังเบี้ยว/gimbal ชี้ผิดทิศ?)
+  [close] ช่อง (1, 0) ก้มดูกำแพง ESW มุม 225° 315° 45° 135°
+frontier -> (1, 1)  path=N
+[drive] ทิศ N 603/600mm ถึง (odo) ; คุมข้างด้วย sharp
+[align] กำแพง E: ToF +25°=248 -25°=231 -> ตัวถังเอียงขวา 2.9° -> หมุนแก้ +2.9°
+[align] ตรวจหลังแก้: เหลือเอียง +1.9° (ทิศการหมุนแก้ถูก)
+  [close] ช่อง (1, 1) ก้มดูกำแพง EW มุม 225° 315° 45° 135°
+frontier -> (1, 2)  path=N
+[drive] ทิศ N 609/600mm ถึง (odo) ; คุมข้างด้วย sharp
+frontier -> (0, 2)  path=W
+[drive] ทิศ W 341/600mm ถึง (tof) ; คุมข้างด้วย ไม่มี (odometry) ; ไหลหลังหยุด 42mm
+STOP requested (หุ่นจะหยุดหลังจบก้าวปัจจุบัน)
+[end] END cell=(0, 2)  visited 4/36
+สำรวจเสร็จ: 4/36 ช่อง  เริ่ม [1, 0, 'N']  จบ [0, 2, 'W']
+STOP requested (หุ่นจะหยุดหลังจบก้าวปัจจุบัน)
+===== Assignment 2 : Explore + Shoot Targets (SLAM + Color Sign Shooter) =====
+Grid           : 6 x 6  (cell 0.60 m)
+Start          : cell (1, 0)  heading N
+End            : cell (0, 2)
+Visited cells  : 4 / 36
+Coverage       : 11.11 %
+Map Accuracy   : (no ground truth yet — enter it in the GUI and press Evaluate)
+
+ASCII map ( | --- = wall, ? = unknown, . = visited ):
++---+---+---+---+---+---+
+|   ?   ?   ?   ?   ?   |
++ ? + ? + ? + ? + ? + ? +
+|   ?   ?   ?   ?   ?   |
++ ? + ? + ? + ? + ? + ? +
+|   ?   ?   ?   ?   ?   |
++   +   + ? + ? + ? + ? +
+| .   .     ?   ?   ?   |
++   +   + ? + ? + ? + ? +
+|   | . |   ?   ?   ?   |
++ ? +   + ? + ? + ? + ? +
+|   | . |   ?   ?   ?   |
++---+---+---+---+---+---+
+ไฟล์ทั้งหมดอยู่ที่: d:\ROBOT-Final\Final-Robot\AS2\output\run_20261001_095123
+[robot] กำลังเชื่อมต่อ RoboMaster (AP mode) ...
+[gimbal] yaw sign = +1 (รอบ 1/3: สั่ง moveto(yaw=+30) -> มุมเปลี่ยนจริง +30.0°)
+[robot] เชื่อมต่อสำเร็จ พร้อมใช้งาน
+[shooter] เปิดกล้อง 720p แล้ว
+[diag] Hz ก่อนเปิดกล้อง tof=20 att=19 pos=19 ang=19 | หลังเปิด tof=19 att=20 pos=20 ang=19
+[shooter] พร้อม (เป้าที่ต้องยิง = ตามตารางติ๊กในกล่อง 5)
+[REAL] เชื่อมต่อหุ่นจริงสำเร็จ: 6x6, เริ่ม (1,0) หัน N
+log -> d:\ROBOT-Final\Final-Robot\AS2\output\run_20261001_095243
+[shooter] หาป้าย=เปิด ยิงจริง=เปิด เป้า: BLUE:HORIZONTAL ระยะยิง 40-80 ซม.
+--- EXPLORE ---
+[yaw] ตั้งมุมอ้างอิง = -10.6°
+[start] START cell=(1, 0) heading=N
+[scan] !! S เป็นขอบสนามแต่อ่านโล่ง 1130mm (ตัวถังเบี้ยว/gimbal ชี้ผิดทิศ?)
+  [close] ช่อง (1, 0) ก้มดูกำแพง ESW มุม 225° 315° 45° 135°
+frontier -> (1, 1)  path=N
+[drive] ทิศ N 602/600mm ถึง (odo) ; คุมข้างด้วย sharp
+[align] กำแพง E: ToF +25°=245 -25°=227 -> ตัวถังเอียงขวา 3.3° -> หมุนแก้ +3.3°
+[align] ตรวจหลังแก้: เหลือเอียง +1.1° (ทิศการหมุนแก้ถูก)
+  [close] ช่อง (1, 1) ก้มดูกำแพง EW มุม 225° 315° 45° 135°
+frontier -> (1, 2)  path=N
+[drive] ทิศ N 601/600mm ถึง (odo) ; คุมข้างด้วย sharp
+[measured_pose] offset from centre dx=157mm dy=-0mm
+[time] shift(-0.150,+0.000) ใช้ 1.6s (ช้ากว่าปกติ)
+frontier -> (0, 2)  path=W
+[drive] ทิศ W 512/600mm ถึง (tof) ; คุมข้างด้วย ไม่มี (odometry) ; ไหลหลังหยุด 31mm
+[time] shift(+0.132,-0.000) ใช้ 1.7s (ช้ากว่าปกติ)
+[overshoot] เดิน W: ขาด -132mm (กำแพงหน้า) -> ถอย 132mm ToF 60->187mm
+  [look] เจอป้ายใหม่ #1 GREEN/CIRCLE ~(0.56,0.14) ช่อง (0, 0) จากช่อง (0, 2) ทิศ S ระยะ 138 ซม.
+[gimbal] สั่งไป yaw=-90 แต่มุมจริงยังไม่ถึง (อ่านได้ 250.2°) -> สั่งซ้ำ
+[align] กำแพง W: ToF +25°=204 -25°=197 -> ตัวถังเอียงขวา 1.4° -> หมุนแก้ +1.4°
+  [close] ช่อง (0, 2) ก้มดูกำแพง W มุม 225° 315°
+frontier -> (0, 1)  path=S
+[drive] ทิศ S 602/600mm ถึง (odo) ; คุมข้างด้วย sharp
+  [look] ยืนยันป้าย #1 GREEN/CIRCLE ~(0.50,0.17) ช่อง (0, 0) จากช่อง (0, 1) ทิศ S ระยะ 76 ซม.
+[recenter] วัดซ้ำรอบ 1: x เหลือ +22mm -> ขยับต่อ
+[recenter] วัดซ้ำรอบ 2: x เหลือ +24mm -> ขยับต่อ
+  [close] ช่อง (0, 1) ก้มดูกำแพง EW มุม 225° 315° 45° 135°
+frontier -> (0, 0)  path=S
+[drive] ทิศ S 604/600mm ถึง (tof) ; คุมข้างด้วย sharp
+  [close] ช่อง (0, 0) ก้มดูกำแพง ESW มุม 225° 315° 45° 135°
+frontier -> (0, 3)  path=NNN
+[drive] ทิศ N 607/600mm ถึง (odo) ; คุมข้างด้วย sharp
+[drive] ทิศ N 597/600mm ถึง (odo) ; คุมข้างด้วย sharp
+[drive] ทิศ N 598/600mm ถึง (odo) ; คุมข้างด้วย sharp
+  [look] เจอป้ายใหม่ #2 RED/VERTICAL ~(1.41,3.48) ช่อง (2, 5) จากช่อง (0, 3) ทิศ N ระยะ 177 ซม.
+  [look] เจอป้ายใหม่ #3 YELLOW/SQUARE ~(1.22,3.52) ช่อง (2, 5) จากช่อง (0, 3) ทิศ N ระยะ 169 ซม.
+  [look] เจอป้ายใหม่ #4 BLUE/HORIZONTAL ~(1.38,3.60) ช่อง (2, 5) จากช่อง (0, 3) ทิศ N ระยะ 185 ซม. [เป้า]
+  [look] ตัด GREEN/SQUARE @212ซม.: ไกลกว่ากำแพงที่ ToF วัดได้
+[align] กำแพง W: ToF +25°=252 -25°=228 -> ตัวถังเอียงขวา 4.3° -> หมุนแก้ +4.3°
+[align] ตรวจหลังแก้: เหลือเอียง -2.4° (ทิศการหมุนแก้ถูก)
+  [close] ช่อง (0, 3) ก้มดูกำแพง W มุม 225° 315°
+frontier -> (0, 4)  path=N
+[drive] ทิศ N 608/600mm ถึง (odo) ; คุมข้างด้วย sharp
+  [look] เจอป้ายใหม่ #5 BLUE/HORIZONTAL ~(1.07,3.30) ช่อง (1, 5) จากช่อง (0, 4) ทิศ E ระยะ 98 ซม. [เป้า]
+  [look] เจอป้ายใหม่ #6 RED/CIRCLE ~(1.06,3.16) ช่อง (1, 5) จากช่อง (0, 4) ทิศ E ระยะ 89 ซม.
+[measured_pose] offset from centre dx=15mm dy=-88mm
+[align] กำแพง W: ToF +25°=257 -25°=235 -> ตัวถังเอียงขวา 4.0° -> หมุนแก้ +4.0°
+  [close] ช่อง (0, 4) ก้มดูกำแพง W มุม 225° 315°
+frontier -> (0, 5)  path=N
+[drive] ทิศ N 579/600mm ถึง (tof) ; คุมข้างด้วย sharp
+  [look] ยืนยันป้าย #5 BLUE/HORIZONTAL ~(0.95,3.08) ช่อง (1, 5) จากช่อง (0, 5) ทิศ E ระยะ 69 ซม. [เป้า]
+  [look] เจอป้ายใหม่ #7 YELLOW/HORIZONTAL ~(0.93,3.25) ช่อง (1, 5) จากช่อง (0, 5) ทิศ E ระยะ 63 ซม.
+  [look] เจอป้ายใหม่ #8 RED/SQUARE ~(0.98,3.39) ช่อง (1, 5) จากช่อง (0, 5) ทิศ E ระยะ 68 ซม.
+  [look] ยืนยันป้าย #6 RED/CIRCLE ~(0.98,2.92) ช่อง (1, 5) จากช่อง (0, 5) ทิศ E ระยะ 78 ซม.
+[align] กำแพง N: ToF +25°=208 -25°=228 -> ตัวถังเอียงซ้าย 3.8° -> หมุนแก้ -3.8°
+[hunt] เป้า #5 BLUE/HORIZONTAL ช่อง (1, 5) ทิศ E ระยะ 68 ซม. -> ล็อค
+  [aim] BLUE/HORIZONTAL Z=63cm err=(+0.00,-0.16)° iters=4 -> locked
+  [aim] BLUE/HORIZONTAL Z=63cm err=(-0.01,-0.11)° iters=2 -> locked
+[shoot] เป้า #5 BLUE/HORIZONTAL ช่อง (1, 5) จากช่อง (0, 5) ทิศ E ระยะ 63 ซม.: fired
+  [close] ช่อง (0, 5) ก้มดูกำแพง NW มุม 225° 315° 45°
+frontier -> (1, 5)  path=E
+[drive] ทิศ E 508/553mm ถึง (sharp) ; คุมข้างด้วย tof
+[move] หน้า E 745mm -> เดินแค่ 553mm (ปกติ 600) ให้จอดกลางช่องปลายทาง ไม่ชนกำแพง
+  [close] ช่อง (1, 5) ก้มดูกำแพง NE มุม 315° 45° 135°
+frontier -> (1, 4)  path=S
+[drive] ทิศ S 650/600mm ถึง (tof) ; คุมข้างด้วย sharp
+  [look] ตัด BLUE/SQUARE @70ซม.: เส้นมองผ่านกำแพงในแผนที่
+  [look] ตัด RED/VERTICAL @106ซม.: เส้นมองผ่านกำแพงในแผนที่
+[measured_pose] offset from centre dx=-106mm dy=-7mm
+[align] กำแพง S: ToF +25°=212 -25°=194 -> ตัวถังเอียงขวา 3.5° -> หมุนแก้ +3.5°
+  [close] ช่อง (1, 4) ก้มดูกำแพง S มุม 225° 135°
+frontier -> (2, 4)  path=E
+[drive] ทิศ E 598/600mm ถึง (odo) ; คุมข้างด้วย tof
+[align] กำแพง N: ToF +25°=240 -25°=249 -> ตัวถังเอียงซ้าย 1.5° -> หมุนแก้ -1.5°
+  [close] ช่อง (2, 4) ก้มดูกำแพง NS มุม 225° 315° 45° 135°
+frontier -> (3, 4)  path=E
+[drive] ทิศ E 597/600mm ถึง (odo) ; คุมข้างด้วย tof
+[time] shift(+0.200,+0.000) ใช้ 2.0s (ช้ากว่าปกติ)
+[topup] เดิน E: ขาด +200mm (กำแพงหน้า) -> เติม 200mm ToF 392->201mm
+  [look] เจอป้ายใหม่ #9 YELLOW/HORIZONTAL ~(2.34,1.95) ช่อง (3, 3) จากช่อง (3, 4) ทิศ S ระยะ 79 ซม.
+  [look] เจอป้ายใหม่ #10 BLUE/VERTICAL ~(2.00,1.97) ช่อง (3, 3) จากช่อง (3, 4) ทิศ S ระยะ 74 ซม.
+  [look] เจอป้ายใหม่ #11 YELLOW/SQUARE ~(2.17,1.97) ช่อง (3, 3) จากช่อง (3, 4) ทิศ S ระยะ 73 ซม.
+  [look] เจอป้ายใหม่ #12 YELLOW/CIRCLE ~(1.88,1.96) ช่อง (3, 3) จากช่อง (3, 4) ทิศ S ระยะ 78 ซม.
+[align] กำแพง E: ToF +25°=242 -25°=228 -> ตัวถังเอียงขวา 2.5° -> หมุนแก้ +2.5°
+  [close] ช่อง (3, 4) ก้มดูกำแพง E มุม 45° 135°
+frontier -> (3, 5)  path=N
+[drive] ทิศ N 589/600mm ถึง (tof) ; คุมข้างด้วย sharp
+  [look] เจอป้ายใหม่ #13 BLUE/HORIZONTAL ~(3.36,3.27) ช่อง (5, 5) จากช่อง (3, 5) ทิศ E ระยะ 126 ซม. [เป้า]
+  [look] เจอป้ายใหม่ #14 RED/VERTICAL ~(3.37,3.13) ช่อง (5, 5) จากช่อง (3, 5) ทิศ E ระยะ 128 ซม.
+  [look] เจอป้ายใหม่ #15 RED/HORIZONTAL ~(3.39,3.45) ช่อง (5, 5) จากช่อง (3, 5) ทิศ E ระยะ 130 ซม.
+  [look] ยืนยันป้าย #9 YELLOW/HORIZONTAL ~(2.28,2.01) ช่อง (3, 3) จากช่อง (3, 5) ทิศ S ระยะ 130 ซม.
+  [look] ยืนยันป้าย #10 BLUE/VERTICAL ~(1.95,1.98) ช่อง (3, 3) จากช่อง (3, 5) ทิศ S ระยะ 133 ซม.
+  [look] ยืนยันป้าย #11 YELLOW/SQUARE ~(2.12,2.01) ช่อง (3, 3) จากช่อง (3, 5) ทิศ S ระยะ 129 ซม.
+  [look] ยืนยันป้าย #12 YELLOW/CIRCLE ~(1.82,1.94) ช่อง (3, 3) จากช่อง (3, 5) ทิศ S ระยะ 139 ซม.
+  [look] เจอป้ายใหม่ #16 YELLOW/VERTICAL ~(1.32,3.24) ช่อง (2, 5) จากช่อง (3, 5) ทิศ W ระยะ 79 ซม.
+  [look] เจอป้ายใหม่ #17 YELLOW/SQUARE ~(1.32,3.10) ช่อง (2, 5) จากช่อง (3, 5) ทิศ W ระยะ 80 ซม.
+  [look] เจอป้ายใหม่ #18 GREEN/SQUARE ~(1.31,3.39) ช่อง (2, 5) จากช่อง (3, 5) ทิศ W ระยะ 80 ซม.
+  [look] เจอป้ายใหม่ #19 BLUE/CIRCLE ~(1.28,3.53) ช่อง (2, 5) จากช่อง (3, 5) ทิศ W ระยะ 86 ซม.
+[measured_pose] offset from centre dx=80mm dy=8mm
+[recenter] วัดซ้ำรอบ 1: x เหลือ +22mm -> ขยับต่อ
+[recenter] วัดซ้ำรอบ 2: x เหลือ +23mm -> ขยับต่อ
+  [close] ช่อง (3, 5) ก้มดูกำแพง N มุม 315° 45°
+frontier -> (2, 5)  path=W
+[drive] ทิศ W 603/600mm ถึง (sharp) ; คุมข้างด้วย tof
+[topup] เดิน W: ขาด +46mm (กำแพงหน้า) -> เติม 46mm ToF 238->206mm
+  [look] ยืนยันป้าย #15 RED/HORIZONTAL ~(3.36,3.42) ช่อง (5, 5) จากช่อง (2, 5) ทิศ E ระยะ 187 ซม.
+  [look] ยืนยันป้าย #13 BLUE/HORIZONTAL ~(3.43,3.24) ช่อง (5, 5) จากช่อง (2, 5) ทิศ E ระยะ 193 ซม. [เป้า]
+  [look] ยืนยันป้าย #14 RED/VERTICAL ~(3.46,3.09) ช่อง (5, 5) จากช่อง (2, 5) ทิศ E ระยะ 197 ซม.
+[align] กำแพง N: ToF +25°=217 -25°=212 -> ตัวถังเอียงขวา 1.0° -> หมุนแก้ +1.0°
+  [close] ช่อง (2, 5) ก้มดูกำแพง NSW มุม 225° 315° 45° 135°
+frontier -> (4, 5)  path=EE
+[drive] ทิศ E 597/600mm ถึง (odo) ; คุมข้างด้วย tof
+[drive] ทิศ E 595/600mm ถึง (odo) ; คุมข้างด้วย tof
+  [look] ยืนยันป้าย #16 YELLOW/VERTICAL ~(1.49,3.29) ช่อง (2, 5) จากช่อง (4, 5) ทิศ W ระยะ 121 ซม.
+  [look] เจอป้ายใหม่ #20 YELLOW/SQUARE ~(1.48,3.15) ช่อง (2, 5) จากช่อง (4, 5) ทิศ W ระยะ 123 ซม.
+  [look] ยืนยันป้าย #18 GREEN/SQUARE ~(1.48,3.44) ช่อง (2, 5) จากช่อง (4, 5) ทิศ W ระยะ 122 ซม.
+  [look] ยืนยันป้าย #4 BLUE/HORIZONTAL ~(1.46,3.58) ช่อง (2, 5) จากช่อง (4, 5) ทิศ W ระยะ 127 ซม. [เป้า]
+  [hunt] ไม่ยิง: เห็น {} (ต้อง ≥2/3) #13:ระยะ 84 ซม. นอกช่วง 40-80
+  [close] ช่อง (4, 5) ก้มดูกำแพง NS มุม 225° 315° 45° 135°
+frontier -> (5, 5)  path=E
+[drive] ทิศ E 601/600mm ถึง (odo) ; คุมข้างด้วย tof
+[time] shift(+0.200,+0.000) ใช้ 1.7s (ช้ากว่าปกติ)
+[topup] เดิน E: ขาด +202mm (กำแพงหน้า) -> เติม 200mm ToF 394->194mm
+  [look] ตัด BLUE/CIRCLE @214ซม.: เส้นมองผ่านกำแพงในแผนที่
+[align] กำแพง N: ToF +25°=190 -25°=206 -> ตัวถังเอียงซ้าย 3.2° -> หมุนแก้ -3.2°
+  [close] ช่อง (5, 5) ก้มดูกำแพง NE มุม 315° 45° 135°
+frontier -> (5, 4)  path=S
+[drive] ทิศ S 607/600mm ถึง (odo) ; คุมข้างด้วย sharp
+  [look] เจอป้ายใหม่ #21 GREEN/VERTICAL ~(3.41,3.46) ช่อง (5, 5) จากช่อง (5, 4) ทิศ N ระยะ 77 ซม.
+  [look] เจอป้ายใหม่ #22 BLUE/SQUARE ~(3.26,3.44) ช่อง (5, 5) จากช่อง (5, 4) ทิศ N ระยะ 74 ซม.
+  [look] เจอป้ายใหม่ #23 GREEN/CIRCLE ~(3.12,3.51) ช่อง (5, 5) จากช่อง (5, 4) ทิศ N ระยะ 83 ซม.
+[chassis] shift(+0.000,+0.033) !! หุ่นขยับไป 73mm เกินที่สั่ง 33mm -> หยุดล้อทันที
+[chassis] shift(+0.000,+0.115) ไม่ยืนยันว่าสำเร็จใน 2.0s (timeout/ถูกปฏิเสธ) -> หยุดล้อ
+[chassis] shift(+0.000,+0.115) ขยับจริงแค่ 57/115mm (odometry) -> หยุดล้อ แล้วสั่งส่วนที่เหลือ 58mm ซ้ำ
+[recenter] วัดซ้ำรอบ 1: y เหลือ -115mm -> ขยับต่อ
+  [close] ช่อง (5, 4) ก้มดูกำแพง EW มุม 225° 315° 45° 135°
+frontier -> (5, 3)  path=S
+[drive] ทิศ S 606/600mm ถึง (odo) ; คุมข้างด้วย sharp
+  [look] ยืนยันป้าย #21 GREEN/VERTICAL ~(3.35,3.41) ช่อง (5, 5) จากช่อง (5, 3) ทิศ N ระยะ 131 ซม.
+  [look] ยืนยันป้าย #22 BLUE/SQUARE ~(3.21,3.41) ช่อง (5, 5) จากช่อง (5, 3) ทิศ N ระยะ 132 ซม.
+  [look] ยืนยันป้าย #23 GREEN/CIRCLE ~(3.05,3.54) ช่อง (5, 5) จากช่อง (5, 3) ทิศ N ระยะ 146 ซม.
+  [close] ช่อง (5, 3) ก้มดูกำแพง E มุม 45° 135°
+frontier -> (5, 2)  path=S
+[drive] ทิศ S 579/590mm ถึง (tof) ; คุมข้างด้วย sharp
+[scan] !! E เป็นขอบสนามแต่อ่านโล่ง 1982mm (ตัวถังเบี้ยว/gimbal ชี้ผิดทิศ?)
+[align] กำแพง S: ToF +25°=209 -25°=197 -> ตัวถังเอียงขวา 2.4° -> หมุนแก้ +2.4°
+  [close] ช่อง (5, 2) ก้มดูกำแพง ES มุม 225° 45° 135°
+frontier -> (4, 2)  path=W
+[drive] ทิศ W 591/600mm ถึง (odo) ; คุมข้างด้วย tof
+[align] กำแพง N: ToF +25°=215 -25°=207 -> ตัวถังเอียงขวา 1.5° -> หมุนแก้ +1.5°
+  [close] ช่อง (4, 2) ก้มดูกำแพง NS มุม 225° 315° 45° 135°
+frontier -> (3, 2)  path=W
+[drive] ทิศ W 600/600mm ถึง (odo) ; คุมข้างด้วย tof
+[align] กำแพง N: ToF +25°=237 -25°=228 -> ตัวถังเอียงขวา 1.7° -> หมุนแก้ +1.7°
+  [close] ช่อง (3, 2) ก้มดูกำแพง N มุม 315° 45°
+frontier -> (3, 1)  path=S
+[drive] ทิศ S 609/600mm ถึง (odo) ; คุมข้างด้วย sharp
+STOP requested (หุ่นจะหยุดหลังจบก้าวปัจจุบัน)
+[end] END cell=(3, 1)  visited 23/36
+สำรวจเสร็จ: 23/36 ช่อง  เริ่ม [1, 0, 'N']  จบ [3, 1, 'S']
+===== Assignment 2 : Explore + Shoot Targets (SLAM + Color Sign Shooter) =====
+Grid           : 6 x 6  (cell 0.60 m)
+Start          : cell (1, 0)  heading N
+End            : cell (3, 1)
+Visited cells  : 23 / 36
+Coverage       : 63.89 %
+Map Accuracy   : (no ground truth yet — enter it in the GUI and press Evaluate)
+Targets found  : 18  (must shoot 3, fired 1, knocked 0)
+  #1  GREEN  CIRCLE     (0.52, 0.17) m cell (0, 0)  skip  -
+  #4  BLUE   HORIZONTAL (1.43, 3.58) m cell (2, 5)  MUST  -
+  #5  BLUE   HORIZONTAL (0.93, 3.17) m cell (1, 5)  MUST  FIRED
+  #6  RED    CIRCLE     (1.01, 2.98) m cell (1, 4)  skip  -
+  #7  YELLOW HORIZONTAL (0.95, 3.28) m cell (1, 5)  skip  -
+  #8  RED    SQUARE     (0.99, 3.42) m cell (1, 5)  skip  -
+  #9  YELLOW HORIZONTAL (2.32, 1.96) m cell (3, 3)  skip  -
+  #10 BLUE   VERTICAL   (1.99, 1.97) m cell (3, 3)  skip  -
+  #11 YELLOW SQUARE     (2.15, 1.98) m cell (3, 3)  skip  -
+  #12 YELLOW CIRCLE     (1.86, 1.95) m cell (3, 3)  skip  -
+  #13 BLUE   HORIZONTAL (3.52, 3.27) m cell (5, 5)  MUST  -
+  #14 RED    VERTICAL   (3.54, 3.12) m cell (5, 5)  skip  -
+  #15 RED    HORIZONTAL (3.54, 3.45) m cell (5, 5)  skip  -
+  #16 YELLOW VERTICAL   (1.37, 3.26) m cell (2, 5)  skip  -
+  #18 GREEN  SQUARE     (1.35, 3.42) m cell (2, 5)  skip  -
+  #21 GREEN  VERTICAL   (3.39, 3.46) m cell (5, 5)  skip  -
+  #22 BLUE   SQUARE     (3.24, 3.43) m cell (5, 5)  skip  -
+  #23 GREEN  CIRCLE     (3.09, 3.52) m cell (5, 5)  skip  -
+
+ASCII map ( | --- = wall, ? = unknown, . = visited ):
++---+---+---+---+---+---+
+| .   . | .   .   .   . |
++   +   +---+   +---+   +
+| .   .   .   . |   | . |
++   +---+---+   + ? +   +
+| .     ?   ?   ?     . |
++   +   + ? +---+---+   +
+| .   .       .   .   . |
++   +   + ? +   +---+---+
+| . | . |   | . |   ?   |
++   +   + ? +   + ? + ? +
+| . | . |   ?   ?   ?   |
++---+---+---+---+---+---+
+ไฟล์ทั้งหมดอยู่ที่: d:\ROBOT-Final\Final-Robot\AS2\output\run_20261001_095243
+ตั้งตำแหน่งหุ่น = (1,0) หัน N
+รอบ 2: หุ่นต้องอยู่ช่อง/ทิศที่โปรแกรมคิดว่าอยู่ (ถ้าย้ายหุ่น ใช้โหมด 'ตั้งตำแหน่งหุ่น' ก่อน)
+[shooter] หาป้าย=เปิด ยิงจริง=เปิด เป้า: BLUE:HORIZONTAL ระยะยิง 40-80 ซม.
+--- ROUND 2 ---
+[round2] รอบ 2: เป้าที่ต้องยิง 3 ใบ: #4 BLUE/HORIZONTAL, #5 BLUE/HORIZONTAL, #13 BLUE/HORIZONTAL
+[yaw] ตั้งมุมอ้างอิง = -9.2°
+[plan] เป้า #5 BLUE/HORIZONTAL ช่อง (1, 5) <- ยืนยิงที่ (0, 5) หัน E  (แผน: #5@(0, 5) -> #13@(4, 5))
+[goto] GOTO (0, 5) from (1, 0)
+[drive] ทิศ N 603/600mm ถึง (odo) ; คุมข้างด้วย sharp
+[align] กำแพง E: ToF +25°=248 -25°=228 -> ตัวถังเอียงขวา 3.4° -> หมุนแก้ +3.4°
+[align] ตรวจหลังแก้: เหลือเอียง +1.4° (ทิศการหมุนแก้ถูก)
+[drive] ทิศ N 603/600mm ถึง (odo) ; คุมข้างด้วย sharp
+[measured_pose] offset from centre dx=174mm dy=51mm
+[time] shift(-0.150,-0.051) ใช้ 2.0s (ช้ากว่าปกติ)
+[recenter] วัดซ้ำรอบ 1: x เหลือ +38mm -> ขยับต่อ
+[drive] ทิศ N 533/570mm ถึง (tof) ; คุมข้างด้วย ไม่มี (odometry)
+[align] กำแพง N: ToF +25°=237 -25°=227 -> ตัวถังเอียงขวา 1.9° -> หมุนแก้ +1.9°
+[align] ตรวจหลังแก้: เหลือเอียง +1.4° (ทิศการหมุนแก้ถูก)
+  [close] ช่อง (1, 3) ก้มดูกำแพง N มุม 315° 45°
+[drive] ทิศ W 563/580mm ถึง (sharp) ; คุมข้างด้วย tof
+[drive] ทิศ N 606/600mm ถึง (odo) ; คุมข้างด้วย sharp
+[recenter] วัดซ้ำรอบ 1: y เหลือ +30mm -> ขยับต่อ
+[drive] ทิศ N 564/600mm ถึง (tof) ; คุมข้างด้วย sharp
+[hunt] เป้า #5 BLUE/HORIZONTAL ช่อง (1, 5) ทิศ E ระยะ 70 ซม. -> ล็อค
+  [aim] BLUE/HORIZONTAL Z=64cm err=(+0.03,-0.23)° iters=4 -> locked
+  [aim] BLUE/HORIZONTAL Z=65cm err=(+0.04,-0.25)° iters=2 -> locked
+[shoot] เป้า #5 BLUE/HORIZONTAL ช่อง (1, 5) จากช่อง (0, 5) ทิศ E ระยะ 65 ซม.: fired
+[arrived] ARRIVED at (0, 5)
+[plan] เป้า #13 BLUE/HORIZONTAL ช่อง (5, 5) <- ยืนยิงที่ (4, 5) หัน E  (แผน: #13@(4, 5))
+[goto] GOTO (4, 5) from (0, 5)
+[drive] ทิศ S 603/600mm ถึง (odo) ; คุมข้างด้วย sharp
+[drive] ทิศ E 601/600mm ถึง (odo) ; คุมข้างด้วย ไม่มี (odometry)
+[measured_pose] offset from centre dx=85mm dy=146mm
+[time] shift(-0.085,-0.146) ใช้ 1.7s (ช้ากว่าปกติ)
+[drive] ทิศ E 601/600mm ถึง (odo) ; คุมข้างด้วย tof
+[recenter] วัดซ้ำรอบ 1: x เหลือ -23mm -> ขยับต่อ
+[recenter] วัดซ้ำรอบ 2: x เหลือ -24mm -> ขยับต่อ
+[drive] ทิศ E 519/600mm ถึง (sharp) ; คุมข้างด้วย tof
+[align] กำแพง E: ToF +25°=238 -25°=229 -> ตัวถังเอียงขวา 1.6° -> หมุนแก้ +1.6°
+[drive] ทิศ N 578/600mm ถึง (tof) ; คุมข้างด้วย sharp
+[measured_pose] offset from centre dx=86mm dy=7mm
+[drive] ทิศ E 592/600mm ถึง (odo) ; คุมข้างด้วย tof
+[measured_pose] offset from centre dx=-158mm dy=-1mm
+[time] shift(+0.150,+0.000) ใช้ 1.6s (ช้ากว่าปกติ)
+[arrived] ARRIVED at (4, 5)
+  [hunt] ป้าย #13 ห่าง ~83 ซม. -> ขยับเข้า 126mm ก่อนยิง
+  [hunt] ทิศ E ไม่เห็นป้ายเป้าที่ยิงได้เลย (ได้ภาพ 3/3 เฟรม เห็น RED/HORIZONTAL@56 RED/VERTICAL@60)
+  [hunt] ไม่ได้ยิงเป้า #13 ที่มุมตรง -> หันเยื้อง -12° หา
+[hunt] เป้า #13 BLUE/HORIZONTAL ช่อง (5, 5) ทิศ E ระยะ 55 ซม. -> ล็อค
+  [aim] BLUE/HORIZONTAL Z=50cm err=(+0.18,+0.15)° iters=5 -> locked
+  [hunt] ไม่ยิงเป้า #13: ป้ายที่ล็อคห่างจากเป้า 20 ซม. (ป้ายข้างๆ?)
+  [hunt] ทิศ E ไม่เห็นป้ายเป้าที่ยิงได้เลย (ได้ภาพ 3/3 เฟรม เห็น BLUE/HORIZONTAL@54 BLUE/HORIZONTAL@55 RED/VERTICAL@65 RED/VERTICAL@66)
+  [hunt] ไม่ได้ยิงเป้า #13 ที่มุมตรง -> หันเยื้อง +12° หา
+[hunt] เป้า #13 BLUE/HORIZONTAL ช่อง (5, 5) ทิศ E ระยะ 53 ซม. -> ล็อค
+  [aim] BLUE/HORIZONTAL Z=50cm err=(-0.00,-0.18)° iters=4 -> locked
+  [hunt] ไม่ยิงเป้า #13: ป้ายที่ล็อคห่างจากเป้า 20 ซม. (ป้ายข้างๆ?)
+  [hunt] ทิศ E ไม่เห็นป้ายเป้าที่ยิงได้เลย (ได้ภาพ 3/3 เฟรม เห็น BLUE/HORIZONTAL@53 BLUE/HORIZONTAL@54 RED/HORIZONTAL@58)
+[shoot_plan] ไม่มีช่องที่ยิงเป้าที่เหลือได้ตามกติกา: #4, #13
+[round2_end] รอบ 2 จบ: ยิง 1/3 เป้า เวลา 160 วิ
+รอบ 2 จบ: ยิง 1/3 เป้า
+===== Assignment 2 : Explore + Shoot Targets (SLAM + Color Sign Shooter) =====
+Grid           : 6 x 6  (cell 0.60 m)
+Start          : cell (1, 0)  heading N
+End            : cell (3, 1)
+Visited cells  : 24 / 36
+Coverage       : 66.67 %
+Map Accuracy   : (no ground truth yet — enter it in the GUI and press Evaluate)
+Targets found  : 18  (must shoot 3, fired 1, knocked 0)
+  #1  GREEN  CIRCLE     (0.52, 0.17) m cell (0, 0)  skip  -
+  #4  BLUE   HORIZONTAL (1.43, 3.58) m cell (2, 5)  MUST  -
+  #5  BLUE   HORIZONTAL (0.92, 3.16) m cell (1, 5)  MUST  FIRED
+  #6  RED    CIRCLE     (1.01, 2.98) m cell (1, 4)  skip  -
+  #7  YELLOW HORIZONTAL (0.95, 3.28) m cell (1, 5)  skip  -
+  #8  RED    SQUARE     (0.99, 3.42) m cell (1, 5)  skip  -
+  #9  YELLOW HORIZONTAL (2.32, 1.96) m cell (3, 3)  skip  -
+  #10 BLUE   VERTICAL   (1.99, 1.97) m cell (3, 3)  skip  -
+  #11 YELLOW SQUARE     (2.15, 1.98) m cell (3, 3)  skip  -
+  #12 YELLOW CIRCLE     (1.86, 1.95) m cell (3, 3)  skip  -
+  #13 BLUE   HORIZONTAL (3.52, 3.27) m cell (5, 5)  MUST  -
+  #14 RED    VERTICAL   (3.54, 3.12) m cell (5, 5)  skip  -
+  #15 RED    HORIZONTAL (3.54, 3.45) m cell (5, 5)  skip  -
+  #16 YELLOW VERTICAL   (1.37, 3.26) m cell (2, 5)  skip  -
+  #18 GREEN  SQUARE     (1.35, 3.42) m cell (2, 5)  skip  -
+  #21 GREEN  VERTICAL   (3.39, 3.46) m cell (5, 5)  skip  -
+  #22 BLUE   SQUARE     (3.24, 3.43) m cell (5, 5)  skip  -
+  #23 GREEN  CIRCLE     (3.09, 3.52) m cell (5, 5)  skip  -
+
+ASCII map ( | --- = wall, ? = unknown, . = visited ):
++---+---+---+---+---+---+
+| .   . | .   .   .   . |
++   +   +---+   +---+   +
+| .   .   .   . |   | . |
++   +---+---+   + ? +   +
+| .   .     ?   ?     . |
++   +   + ? +---+---+   +
+| .   .       .   .   . |
++   +   + ? +   +---+---+
+| . | . |   | . |   ?   |
++   +   + ? +   + ? + ? +
+| . | . |   ?   ?   ?   |
++---+---+---+---+---+---+
+ไฟล์ทั้งหมดอยู่ที่: d:\ROBOT-Final\Final-Robot\AS2\output\run_20261001_095243
+STOP requested (หุ่นจะหยุดหลังจบก้าวปัจจุบัน)
+GT ใหม่: มีแค่ขอบนอก — เลือกโหมด 'วาด Ground Truth' แล้วคลิกเส้นขอบที่เป็นกำแพงจริง
+===== Assignment 2 : Explore + Shoot Targets (SLAM + Color Sign Shooter) =====
+Grid           : 6 x 6  (cell 0.60 m)
+Start          : cell (1, 0)  heading N
+End            : cell (3, 1)
+Visited cells  : 24 / 36
+Coverage       : 66.67 %
+Correct cells  : 23 / 36
+Map Accuracy   : 63.89 %
+Edge accuracy  : 84.52 %  (per wall segment)
+Walls GT/detected/matched : 44 / 41 / 40
+Wrong cells    : [(1, 0), (2, 0), (2, 1), (2, 2), (2, 3), (3, 0), (3, 3), (4, 0), (4, 1), (4, 3), (4, 4), (5, 0), (5, 1)]
+Targets found  : 18  (must shoot 3, fired 1, knocked 0)
+  #1  GREEN  CIRCLE     (0.52, 0.17) m cell (0, 0)  skip  -
+  #4  BLUE   HORIZONTAL (1.43, 3.58) m cell (2, 5)  MUST  -
+  #5  BLUE   HORIZONTAL (0.92, 3.16) m cell (1, 5)  MUST  FIRED
+  #6  RED    CIRCLE     (1.01, 2.98) m cell (1, 4)  skip  -
+  #7  YELLOW HORIZONTAL (0.95, 3.28) m cell (1, 5)  skip  -
+  #8  RED    SQUARE     (0.99, 3.42) m cell (1, 5)  skip  -
+  #9  YELLOW HORIZONTAL (2.32, 1.96) m cell (3, 3)  skip  -
+  #10 BLUE   VERTICAL   (1.99, 1.97) m cell (3, 3)  skip  -
+  #11 YELLOW SQUARE     (2.15, 1.98) m cell (3, 3)  skip  -
+  #12 YELLOW CIRCLE     (1.86, 1.95) m cell (3, 3)  skip  -
+  #13 BLUE   HORIZONTAL (3.52, 3.27) m cell (5, 5)  MUST  -
+  #14 RED    VERTICAL   (3.54, 3.12) m cell (5, 5)  skip  -
+  #15 RED    HORIZONTAL (3.54, 3.45) m cell (5, 5)  skip  -
+  #16 YELLOW VERTICAL   (1.37, 3.26) m cell (2, 5)  skip  -
+  #18 GREEN  SQUARE     (1.35, 3.42) m cell (2, 5)  skip  -
+  #21 GREEN  VERTICAL   (3.39, 3.46) m cell (5, 5)  skip  -
+  #22 BLUE   SQUARE     (3.24, 3.43) m cell (5, 5)  skip  -
+  #23 GREEN  CIRCLE     (3.09, 3.52) m cell (5, 5)  skip  -
+
+ASCII map ( | --- = wall, ? = unknown, . = visited ):
++---+---+---+---+---+---+
+| .   . | .   .   .   . |
++   +   +---+   +---+   +
+| .   .   .   . |   | . |
++   +---+---+   + ? +   +
+| .   .     ?   ?     . |
++   +   + ? +---+---+   +
+| .   .       .   .   . |
++   +   + ? +   +---+---+
+| . | . |   | . |   ?   |
++   +   + ? +   + ? + ? +
+| . | . |   ?   ?   ?   |
++---+---+---+---+---+---+
+ไฟล์ทั้งหมดอยู่ที่: d:\ROBOT-Final\Final-Robot\AS2\output\run_20261001_095243
+===== Assignment 2 : Explore + Shoot Targets (SLAM + Color Sign Shooter) =====
+Grid           : 6 x 6  (cell 0.60 m)
+Start          : cell (1, 0)  heading N
+End            : cell (3, 1)
+Visited cells  : 24 / 36
+Coverage       : 66.67 %
+Correct cells  : 23 / 36
+Map Accuracy   : 63.89 %
+Edge accuracy  : 84.52 %  (per wall segment)
+Walls GT/detected/matched : 44 / 41 / 40
+Wrong cells    : [(1, 0), (2, 0), (2, 1), (2, 2), (2, 3), (3, 0), (3, 3), (4, 0), (4, 1), (4, 3), (4, 4), (5, 0), (5, 1)]
+Targets found  : 18  (must shoot 3, fired 1, knocked 0)
+  #1  GREEN  CIRCLE     (0.52, 0.17) m cell (0, 0)  skip  -
+  #4  BLUE   HORIZONTAL (1.43, 3.58) m cell (2, 5)  MUST  -
+  #5  BLUE   HORIZONTAL (0.92, 3.16) m cell (1, 5)  MUST  FIRED
+  #6  RED    CIRCLE     (1.01, 2.98) m cell (1, 4)  skip  -
+  #7  YELLOW HORIZONTAL (0.95, 3.28) m cell (1, 5)  skip  -
+  #8  RED    SQUARE     (0.99, 3.42) m cell (1, 5)  skip  -
+  #9  YELLOW HORIZONTAL (2.32, 1.96) m cell (3, 3)  skip  -
+  #10 BLUE   VERTICAL   (1.99, 1.97) m cell (3, 3)  skip  -
+  #11 YELLOW SQUARE     (2.15, 1.98) m cell (3, 3)  skip  -
+  #12 YELLOW CIRCLE     (1.86, 1.95) m cell (3, 3)  skip  -
+  #13 BLUE   HORIZONTAL (3.52, 3.27) m cell (5, 5)  MUST  -
+  #14 RED    VERTICAL   (3.54, 3.12) m cell (5, 5)  skip  -
+  #15 RED    HORIZONTAL (3.54, 3.45) m cell (5, 5)  skip  -
+  #16 YELLOW VERTICAL   (1.37, 3.26) m cell (2, 5)  skip  -
+  #18 GREEN  SQUARE     (1.35, 3.42) m cell (2, 5)  skip  -
+  #21 GREEN  VERTICAL   (3.39, 3.46) m cell (5, 5)  skip  -
+  #22 BLUE   SQUARE     (3.24, 3.43) m cell (5, 5)  skip  -
+  #23 GREEN  CIRCLE     (3.09, 3.52) m cell (5, 5)  skip  -
+
+ASCII map ( | --- = wall, ? = unknown, . = visited ):
++---+---+---+---+---+---+
+| .   . | .   .   .   . |
++   +   +---+   +---+   +
+| .   .   .   . |   | . |
++   +---+---+   + ? +   +
+| .   .     ?   ?     . |
++   +   + ? +---+---+   +
+| .   .       .   .   . |
++   +   + ? +   +---+---+
+| . | . |   | . |   ?   |
++   +   + ? +   + ? + ? +
+| . | . |   ?   ?   ?   |
++---+---+---+---+---+---+
+ไฟล์ทั้งหมดอยู่ที่: d:\ROBOT-Final\Final-Robot\AS2\output\run_20261001_095243
+[camera] ตัวถอดรหัสภาพ (process แยก) หยุด code 1 -> เปิดใหม่ (ครั้งที่ 1) โปรแกรมหลักทำงานต่อ
+[camera] ตัวถอดรหัสภาพ (process แยก) หยุด code 1 -> เปิดใหม่ (ครั้งที่ 2) โปรแกรมหลักทำงานต่อ
+[camera] ตัวถอดรหัสภาพ (process แยก) หยุด code 1 -> เปิดใหม่ (ครั้งที่ 3) โปรแกรมหลักทำงานต่อ
+[camera] ตัวถอดรหัสภาพ (process แยก) หยุด code 1 -> เปิดใหม่ (ครั้งที่ 4) โปรแกรมหลักทำงานต่อ
