@@ -262,34 +262,40 @@ class _IsoCam:
                                     str(os.getpid())], stdout=self._sp.DEVNULL, stderr=self._errf,
                                    creationflags=getattr(self._sp, "CREATE_NO_WINDOW", 0))
         self._t_spawn = time.time()
+        self._seq_spawn = float(self.hdr[0])
 
     def alive(self):
         return self.proc is not None and self.proc.poll() is None
 
     def restart(self, force=False):
-        quick = time.time() - self._t_spawn < 6.0           # ตายเร็ว (ต่อหุ่นไม่ได้/หุ่นปิด) ติดกัน
-        self._quick = (getattr(self, "_quick", 0) + 1) if quick else 0
-        wait = 2.0 if self._quick < 6 else 15.0             # ตายเร็วติดกันหลายครั้ง -> ลองห่างขึ้น
-        if time.time() - self._t_spawn < wait and not force:
-            return                                          # เว้นระยะ ไม่เปิดถี่ถ้าพังซ้ำทันที
-        if self._quick >= 6 and self._quick % 10 != 6 and not force:
-            self.n_restart += 1
-            self._spawn()                                   # ลองเงียบๆ (ไม่ spam log)
-            return
+        """ตัวลูกตาย -> เปิดใหม่ ; เปิดแล้วไม่ได้ภาพสักเฟรมติดกันหลายครั้ง (หุ่นปิด/ต่อวิดีโอไม่ได้) -> ลองห่างขึ้น
+        และ log นานๆ ครั้ง (log 1/10: หลังปิดหุ่น log กล้องรัวเป็นร้อยบรรทัด)"""
+        now = time.time()
+        fails = getattr(self, "_fails", 0)
+        if not force and now - self._t_spawn < (2.0 if fails < 6 else 15.0):
+            return                                          # เว้นระยะ ไม่เปิดถี่
+        got = float(self.hdr[0]) != getattr(self, "_seq_spawn", -1.0)
+        self._fails = 0 if got else fails + 1
         code = self.proc.poll() if self.proc is not None else None
         if self.alive():
             self.proc.kill()
             self.proc.wait(timeout=2)
         self.n_restart += 1
-        self.log(f"[camera] ตัวถอดรหัสภาพ (process แยก) {'หยุด code ' + str(code) if code is not None else 'ถูกสั่งรีสตาร์ท'}"
-                 f" -> เปิดใหม่ (ครั้งที่ {self.n_restart}) โปรแกรมหลักทำงานต่อ")
-        if self.n_restart % 3 == 0:                         # เปิดใหม่หลายครั้งยังไม่ได้ภาพ -> สั่งหุ่นปิด/เปิดสตรีมด้วย
+        loud = self._fails < 6 or self._fails % 20 == 0
+        if loud:
+            self.log(f"[camera] ตัวถอดรหัสภาพ (process แยก) {'หยุด code ' + str(code) if code is not None else 'ถูกสั่งรีสตาร์ท'}"
+                     f" -> เปิดใหม่ (ครั้งที่ {self.n_restart}"
+                     f"{f', ไม่ได้ภาพติดกัน {self._fails} ครั้ง: หุ่นปิด/หลุด? ลองทุก 15 วิ' if self._fails >= 6 else ''})"
+                     f" โปรแกรมหลักทำงานต่อ")
+        if self._fails in (3, 6) or (self._fails > 6 and self._fails % 20 == 0):
+            # เปิดใหม่หลายครั้งยังไม่ได้ภาพ -> สั่งหุ่นปิด/เปิดสตรีมด้วย
             self._stream(False)
             time.sleep(0.3)
             try:
                 self._stream(True)
             except Exception as e:                          # noqa: BLE001
-                self.log(f"[camera] เปิดสตรีมใหม่ไม่สำเร็จ: {e}")
+                if loud:
+                    self.log(f"[camera] เปิดสตรีมใหม่ไม่สำเร็จ: {e}")
         self._spawn()
 
     def grab(self, last):
